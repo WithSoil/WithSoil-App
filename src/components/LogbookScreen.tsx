@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   StyleSheet,
   SafeAreaView,
   TouchableWithoutFeedback,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import {
   ChevronLeft,
@@ -25,16 +27,29 @@ import {
   Settings,
   Sun,
 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker'; 
+import { diaryApi } from '../apis/diary'; 
 
-import profileImage from '../assets/image.png'; // 실제 경로에 맞게 주석 해제
+import profileImage from '../assets/image.png'; 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiClient } from '../apis/apiClient';
 
 interface LogbookScreenProps {
   navigation: any;
+  route?: any; 
 }
 
-export function LogbookScreen({ navigation }: LogbookScreenProps) {
-  const [selectedDate, setSelectedDate] = useState(15);
+export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
+  const [selectedDate, setSelectedDate] = useState(new Date().getDate()); 
   const [showCalendar, setShowCalendar] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); 
+
+  const editMode = route?.params?.editMode || false;
+  const editDiaryId = route?.params?.diaryId;
+  const existingData = route?.params?.existingData;
+
+  const [existingPhotos, setExistingPhotos] = useState<any[]>([]);
+
   const [tasks, setTasks] = useState({
     watered: false,
     fertilized: false,
@@ -42,19 +57,13 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
     pruned: false,
   });
   const [notes, setNotes] = useState('');
+  const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]); 
 
   const daysInMonth = Array.from({ length: 31 }, (_, i) => i + 1);
-  const loggedDays = [5, 10, 15, 20, 25, 28];
-  const calendarDays = Array.from({ length: 31 }, (_, i) => ({
-    date: i + 1,
-    hasLog: loggedDays.includes(i + 1),
-  }));
 
-  const pastLogs = [
-    { id: 1, date: '5월 28일', preview: '오늘은 토마토에 물을 듬뿍 주었다. 잎이 싱싱해 보인다...', thumbnail: '🍅' },
-    { id: 2, date: '5월 25일', preview: '비료를 주었더니 상추가 많이 자랐다. 내일 수확해야겠다...', thumbnail: '🥬' },
-    { id: 3, date: '5월 20일', preview: '새로운 방울토마토 모종을 심었다. 햇빛이 좋아서...', thumbnail: '🌱' },
-  ];
+  const [pastLogs, setPastLogs] = useState<any[]>([]);
+  const [loggedDays, setLoggedDays] = useState<number[]>([]);
+  const [userToken, setUserToken] = useState<string | null>(null);
 
   const taskButtons = [
     { id: 'watered', label: '물 주기', icon: Droplets },
@@ -63,9 +72,151 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
     { id: 'pruned', label: '가지치기', icon: Cloud },
   ];
 
+  const loadDiaries = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken');
+      setUserToken(token);
+
+      const now = new Date();
+      const monthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      const logs = await diaryApi.getMonthlyDiaries(monthStr);
+      setPastLogs(logs || []);
+
+      const calendar = await diaryApi.getMonthlyCalendar(monthStr);
+      if (calendar) {
+        const days = calendar.map((item: any) => parseInt(item.date.split('-')[2], 10));
+        setLoggedDays(days);
+      }
+    } catch (error) {
+      console.error("일지 목록 불러오기 실패:", error);
+    }
+  };
+
+  useEffect(() => {
+    loadDiaries();
+  }, []);
+
+  useEffect(() => {
+    if (editMode && existingData) {
+      setNotes(existingData.memo || '');
+      
+      const dateObj = new Date(existingData.diaryDateTime);
+      setSelectedDate(dateObj.getDate());
+
+      // 기존 한 일(works) 체크박스 활성화
+      const newTasks = { watered: false, fertilized: false, weeded: false, pruned: false };
+      existingData.works?.forEach((work: string) => {
+        if (work === '물 주기') newTasks.watered = true;
+        if (work === '비료 주기') newTasks.fertilized = true;
+        if (work === '잡초 제거') newTasks.weeded = true;
+        if (work === '가지치기') newTasks.pruned = true;
+      });
+      setTasks(newTasks);
+
+      // 서버에 저장되어 있던 기존 사진 셋팅
+      if (existingData.photos && existingData.photos.length > 0) {
+        setExistingPhotos(existingData.photos);
+      }
+    }
+  }, [editMode, existingData]);
+
+  const calendarDays = Array.from({ length: 31 }, (_, i) => ({
+    date: i + 1,
+    hasLog: loggedDays.includes(i + 1),
+  }));
+
+  const pickImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setSelectedPhotos([result.assets[0].uri]);
+        setExistingPhotos([]); 
+      }
+    } catch (error) {
+      Alert.alert('오류', '이미지를 불러오는 중 문제가 발생했습니다.');
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setSelectedPhotos((prev) => prev.filter((_, i) => i !== index));
+    setExistingPhotos([]); // X를 누르면 기존 서버 사진도 화면에서 비움
+  };
+
+  const handleSaveDiary = async () => {
+
+    const selectedTaskLabels = taskButtons
+      .filter((button) => tasks[button.id as keyof typeof tasks])
+      .map((button) => button.label);
+
+    if (selectedTaskLabels.length === 0 && !notes.trim() && selectedPhotos.length === 0) {
+      Alert.alert('알림', '오늘 한 일, 메모, 혹은 사진 중 하나는 기록해주세요!');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+
+      const now = new Date();
+
+      const diaryDateTime = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        selectedDate,
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds()
+      ).toISOString().split('.')[0]; 
+
+
+      const payload = {
+        diaryDateTime: diaryDateTime,
+        works: selectedTaskLabels, 
+        memo: notes,
+        photoUris: selectedPhotos, 
+      };
+
+      if (editMode) {
+        await diaryApi.updateDiary(editDiaryId, payload);
+        Alert.alert('성공', '일지가 수정되었습니다!', [
+          { 
+            text: '확인', 
+            onPress: () => {
+              navigation.navigate('LogbookScreen', { editMode: false, existingData: null });
+              loadDiaries(); 
+            } 
+          }
+        ]);
+      } else {
+        await diaryApi.createDiary(payload);
+        Alert.alert('성공', '농부일지가 저장되었습니다!', [
+          { 
+            text: '확인', 
+            onPress: () => {
+              setTasks({ watered: false, fertilized: false, weeded: false, pruned: false });
+              setNotes('');
+              setSelectedPhotos([]);
+              loadDiaries(); 
+            } 
+          }
+        ]);
+      }
+    } catch (error: any) {
+      console.error('일지 저장 에러:', error);
+      const errMsg = error.response?.data?.message || '일지 저장에 실패했습니다.';
+      Alert.alert('저장 실패', errMsg);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Top App Bar */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.profileImageContainer}>
@@ -83,7 +234,6 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
         </View>
       </View>
 
-      {/* Date Selector Section */}
       <View style={styles.dateSection}>
         <View style={styles.dateHeader}>
           <TouchableOpacity style={styles.iconButtonSmall}>
@@ -100,7 +250,6 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {/* Horizontal Date Selector */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateScroll}>
           {daysInMonth.map((date) => {
             const hasLog = loggedDays.includes(date);
@@ -129,7 +278,6 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
         </ScrollView>
       </View>
 
-      {/* Full Calendar Modal */}
       <Modal visible={showCalendar} transparent={true} animationType="fade">
         <TouchableWithoutFeedback onPress={() => setShowCalendar(false)}>
           <View style={styles.modalOverlay} />
@@ -145,7 +293,7 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
             {['일', '월', '화', '수', '목', '금', '토'].map((day) => (
               <Text key={day} style={styles.calendarDayHeader}>{day}</Text>
             ))}
-            {/* Empty cells for month start (3 days) */}
+
             {Array.from({ length: 3 }).map((_, i) => <View key={`empty-${i}`} style={styles.calendarCell} />)}
             
             {calendarDays.map(({ date, hasLog }) => (
@@ -192,8 +340,6 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
         </View>
 
         <Text style={styles.sectionTitle}>오늘 할 일</Text>
-
-        {/* Tasks Grid */}
         <View style={styles.tasksGrid}>
           {taskButtons.map(({ id, label, icon: Icon }) => {
             const isActive = tasks[id as keyof typeof tasks];
@@ -220,15 +366,51 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
 
         <Text style={styles.sectionTitle}>작물 사진</Text>
 
-        <TouchableOpacity style={styles.photoButton}>
-          <View style={styles.photoIconCircle}>
-            <Camera size={28} color="#4CAF50" />
+        {/* 💡 선택된 사진이 있으면 프리뷰 보여주고, 없으면 카메라 버튼 노출 */}
+        {selectedPhotos.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+            {selectedPhotos.map((uri, index) => (
+              <View key={index} style={styles.photoPreviewContainer}>
+                <Image source={{ uri }} style={styles.photoPreview} />
+                <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removePhoto(index)}>
+                  <X size={16} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.photoAddSmallBtn} onPress={pickImage}>
+              <Plus size={24} color="#4CAF50" />
+            </TouchableOpacity>
           </View>
-          <Text style={styles.photoText}>오늘의 사진 추가</Text>
-        </TouchableOpacity>
+        ) : existingPhotos.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 24 }}>
+            {existingPhotos.map((photo, index) => (
+              <View key={index} style={styles.photoPreviewContainer}>
+                <Image 
+                  source={{ 
+                    uri: `${apiClient.defaults.baseURL}${photo.imageUrl}`,
+                    headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+                  }} 
+                  style={styles.photoPreview} 
+                />
+                <TouchableOpacity style={styles.photoRemoveBtn} onPress={() => removePhoto(index)}>
+                  <X size={16} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.photoAddSmallBtn} onPress={pickImage}>
+              <Text style={{ fontSize: 12, color: '#4CAF50', marginTop: 4 }}>사진 교체</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+            <View style={styles.photoIconCircle}>
+              <Camera size={28} color="#4CAF50" />
+            </View>
+            <Text style={styles.photoText}>오늘의 사진 추가</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.sectionTitle}>메모</Text>
-
         <TextInput
           style={styles.notesInput}
           multiline
@@ -239,25 +421,65 @@ export function LogbookScreen({ navigation }: LogbookScreenProps) {
           onChangeText={setNotes}
         />
 
-        <TouchableOpacity style={styles.saveButton}>
-          <Text style={styles.saveButtonText}>일지 저장</Text>
+        <TouchableOpacity 
+          style={[styles.saveButton, isLoading && { opacity: 0.7 }]} 
+          onPress={handleSaveDiary}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+             <ActivityIndicator color="#FFFFFF" />
+          ) : (
+             <Text style={styles.saveButtonText}>
+              {editMode ? '일지 수정 완료' : '일지 저장'}
+             </Text>
+          )}
         </TouchableOpacity>
 
         {/* Past Logs */}
+        {!editMode && (
         <View style={styles.pastLogsSection}>
           <Text style={styles.sectionTitle}>기록된 일지 보기</Text>
-          {pastLogs.map((log) => (
-            <TouchableOpacity key={log.id} style={styles.pastLogCard}>
-              <View style={styles.pastLogEmoji}>
-                <Text style={{ fontSize: 24 }}>{log.thumbnail}</Text>
-              </View>
-              <View style={styles.pastLogContent}>
-                <Text style={styles.pastLogDate}>{log.date}</Text>
-                <Text style={styles.pastLogPreview} numberOfLines={2}>{log.preview}</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+          
+          {pastLogs.length === 0 ? (
+            <Text style={{ color: '#666', textAlign: 'center', marginTop: 20 }}>
+              아직 기록된 일지가 없습니다.
+            </Text>
+          ) : (
+            pastLogs.map((log) => {
+              // 백엔드의 "2026-05-28T09:30" 포맷을 "5월 28일"로 변환
+              const dateObj = new Date(log.diaryDateTime);
+              const dateStr = `${dateObj.getMonth() + 1}월 ${dateObj.getDate()}일`;
+
+              return (
+                <TouchableOpacity 
+                  key={log.id} 
+                  style={styles.pastLogCard} 
+                  onPress={() => navigation.navigate('DiaryDetailScreen', { diaryId: log.id })}
+                >
+                  {/* 썸네일 이미지가 있으면 렌더링, 없으면 기본 아이콘 표시 */}
+                  {log.thumbnailUrl ? (
+                    <Image
+                      source={{
+                        uri: `${apiClient.defaults.baseURL}${log.thumbnailUrl}`,
+                        headers: userToken ? { Authorization: `Bearer ${userToken}` } : undefined,
+                      }}
+                      style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: '#F1F8E9' }}
+                    />
+                  ) : (
+                    <View style={styles.pastLogEmoji}>
+                      <Text style={{ fontSize: 24 }}>🌿</Text>
+                    </View>
+                  )}
+                  <View style={styles.pastLogContent}>
+                    <Text style={styles.pastLogDate}>{dateStr}</Text>
+                    <Text style={styles.pastLogPreview} numberOfLines={2}>{log.preview}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
         </View>
+        )}
 
       </ScrollView>
     </SafeAreaView>
@@ -332,4 +554,38 @@ const styles = StyleSheet.create({
   pastLogContent: { flex: 1, justifyContent: 'center' },
   pastLogDate: { fontSize: 14, fontWeight: '600', color: '#4CAF50', marginBottom: 4 },
   pastLogPreview: { fontSize: 14, color: '#666', lineHeight: 20 },
+  photoPreviewContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoAddSmallBtn: {
+    width: 100,
+    height: 100,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(76, 175, 80, 0.3)',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F8E9',
+  },
 });

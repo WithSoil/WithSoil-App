@@ -15,6 +15,7 @@ import { DiagnosisScreen } from './src/components/DiagnosisScreen';
 import { LogbookScreen } from './src/components/LogbookScreen';
 import { ChatbotScreen } from './src/components/ChatbotScreen';
 import { ProfileScreen } from './src/components/ProfileScreen';
+import { DiaryDetailScreen } from './src/components/DiaryDetailScreen';
 
 // 네비게이션 파라미터 타입 정의
 export type RootStackParamList = {
@@ -30,6 +31,7 @@ export type RootStackParamList = {
   MainTabs: undefined;
   CropDetail: { id: string }; 
   Chatbot: undefined;
+  DiaryDetailScreen: { diaryId: number };
 };
 
 export type TabParamList = {
@@ -96,8 +98,8 @@ export default function App() {
         <Stack.Screen name="SignupScreen" component={SignupScreen} />
         <Stack.Screen name="LocationSetup" component={LocationSetup} />
         <Stack.Screen name="EmailLoginScreen" component={EmailLoginScreen} />
+        <Stack.Screen name="DiaryDetailScreen" component={DiaryDetailScreen} />
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
-
         <Stack.Screen name="CropDetail" component={CropDetailScreen} />
         <Stack.Screen name="Chatbot" component={ChatbotScreen} />
       </Stack.Navigator>

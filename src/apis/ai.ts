@@ -5,6 +5,14 @@ export interface AiChatResponseDto {
   status: string;
   answer: string;
 }
+export interface AiDiagnosisResponseDto {
+  status: string;
+  crop: string;
+  resultType: string;
+  diagnosis: string;
+  message: string;
+  confidence: number;
+}
 
 export const aiApi = {
 
@@ -17,8 +25,8 @@ export const aiApi = {
     return response.data;
   },
 
-  uploadYoloImage: async (formData: FormData): Promise<string> => {
-    const response = await apiClient.post<string>('/api/v1/ai/yolo', formData, {
+  diagnoseCrop: async (formData: FormData): Promise<AiDiagnosisResponseDto> => {
+    const response = await apiClient.post<AiDiagnosisResponseDto>('/api/v1/ai/diagnose', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

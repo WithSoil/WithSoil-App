@@ -11,7 +11,7 @@ export interface ApiResponse<T> {
 
 const getBaseUrl = () => {
   if (__DEV__) {
-    return 'https://seven-hoops-rule.loca.lt';
+    return 'https://quiet-shirts-send.loca.lt';
   }
   return 'https://your-production-server.com'; 
 };

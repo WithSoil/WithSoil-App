@@ -7,27 +7,30 @@ import {
   StyleSheet,
   TouchableWithoutFeedback,
   Platform,
+  ScrollView,
+  SafeAreaView,
 } from 'react-native';
-import { Keyboard } from 'lucide-react-native';
+import { X } from 'lucide-react-native';
 
 interface CropSelectionSheetProps {
-  visible: boolean; // RN용 visible 상태 추가
+  visible: boolean;
   onClose: () => void;
   onSelectCrop: (crop: string) => void;
-  detectionType: 'pest' | 'disease';
+  detectionType?: 'pest' | 'disease';
 }
+
+// 💡 백엔드 FastAPI 모델이 요구하는 24종 작물 배열
+const CROP_LIST = [
+  '가지', '감자', '고추', '단호박', '딸기', '마늘', '무', '배', 
+  '배추', '벼', '사과', '상추', '수박', '애호박', '양배추', '양파', 
+  '오이', '쥬키니호박', '참외', '콩', '토마토', '파', '포도', '호박'
+];
 
 export function CropSelectionSheet({
   visible,
   onClose,
   onSelectCrop,
-  detectionType,
 }: CropSelectionSheetProps) {
-  const title =
-    detectionType === 'pest'
-      ? '담배가루이가 발견되었어요! 🐛 어떤 작물인가요?'
-      : '벌레는 없지만 식물이 아파 보여요! 🍂 어떤 작물인가요?';
-
   return (
     <Modal
       visible={visible}
@@ -42,32 +45,36 @@ export function CropSelectionSheet({
       <View style={styles.sheetContainer}>
         <View style={styles.content}>
           {/* Header */}
-          <Text style={styles.title}>{title}</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>촬영한 작물 선택 🌿</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <X size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.subtitle}>
+            진단 정확도를 높이기 위해 어떤 작물인지 선택해 주세요.
+          </Text>
 
-          {/* Large Prominent Tomato Card */}
-          <TouchableOpacity
-            style={styles.cropCard}
-            onPress={() => onSelectCrop('tomato')}
-            activeOpacity={0.8}
+          {/* 💡 24종 작물 선택 그리드 (스크롤 가능) */}
+          <ScrollView 
+            style={styles.scrollArea} 
+            contentContainerStyle={styles.gridContainer}
+            showsVerticalScrollIndicator={false}
           >
-            <View style={styles.emojiCircle}>
-              <Text style={styles.emojiText}>🍅</Text>
-            </View>
-            <View style={styles.cropTextContainer}>
-              <Text style={styles.cropSubtitle}>내 작물</Text>
-              <Text style={styles.cropTitle}>토마토</Text>
-            </View>
-          </TouchableOpacity>
+            {CROP_LIST.map((crop, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.cropItem}
+                onPress={() => onSelectCrop(crop)} // 선택된 한국어 작물명을 정확히 전달
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cropText}>{crop}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
 
-          {/* Manual Input Button */}
-          <TouchableOpacity
-            style={styles.manualButton}
-            onPress={onClose}
-            activeOpacity={0.7}
-          >
-            <Keyboard size={20} color="#888" />
-            <Text style={styles.manualButtonText}>작물 직접 입력하기 ⌨️</Text>
-          </TouchableOpacity>
+          <SafeAreaView />
         </View>
       </View>
     </Modal>
@@ -87,7 +94,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    minHeight: 350,
+    height: '70%', // 너무 꽉 차지 않도록 높이 조절
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -95,72 +102,52 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   content: {
+    flex: 1,
     padding: 24,
     paddingBottom: Platform.OS === 'ios' ? 48 : 24,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    lineHeight: 28,
-    marginBottom: 24,
     color: '#000',
   },
-  cropCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F1F8E9', // from-primary/10 느낌
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
+  closeBtn: {
+    padding: 4,
   },
-  emojiCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+  subtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 20,
   },
-  emojiText: {
-    fontSize: 32,
-  },
-  cropTextContainer: {
+  scrollArea: {
     flex: 1,
   },
-  cropSubtitle: {
-    fontSize: 14,
-    color: '#4CAF50',
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  cropTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  manualButton: {
+  gridContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingBottom: 20,
+  },
+  cropItem: {
+    width: '30%', 
+    backgroundColor: '#F1F8E9', 
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#EAEAEE',
-    borderStyle: 'dashed',
-    borderRadius: 20,
-    padding: 16,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
   },
-  manualButtonText: {
-    fontWeight: '500',
-    color: '#888',
-    fontSize: 16,
+  cropText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
   },
 });
