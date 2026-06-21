@@ -1,24 +1,25 @@
 import axios from 'axios';
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface ApiResponse<T> {
-  status: string;      
+  status: number;      
   message: string;     
   data: T;             
 }
 
 
-const getBaseUrl = () => {
+export const getBaseUrl = () => {
   if (__DEV__) {
-    return 'https://seven-hoops-rule.loca.lt';
+    return process.env.EXPO_PUBLIC_API_BASE_URL ??'https://seven-hoops-rule.loca.lt';
   }
   return 'https://your-production-server.com'; 
 };
 
 // 3. Axios 인스턴스 생성
+export const API_BASE_URL = getBaseUrl();
+
 export const apiClient = axios.create({
-  baseURL: getBaseUrl(),
+  baseURL: API_BASE_URL,
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
