@@ -21,9 +21,7 @@ export type RootStackParamList = {
   Login: undefined;
   EmailLoginScreen: undefined;
   LocationSetup: {
-    name?: string;
-    email?: string;
-    password?: string;
+    fromSignup?: boolean;
   } | undefined;
   SignupScreen: undefined;
 

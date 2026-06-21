@@ -7,12 +7,13 @@ import {
   StyleSheet,
   SafeAreaView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { MapPin, Navigation, ChevronRight } from 'lucide-react-native';
 import { useRoute } from '@react-navigation/native';
 import { memberApi } from '../apis/member';
+import { FormErrorMessage } from './FormErrorMessage';
+import { getErrorStatus } from '../utils/authErrorMessage';
 import { AddressSearchModal } from './AddressSearchModel';
 
 interface LocationSetupProps {
@@ -22,6 +23,7 @@ interface LocationSetupProps {
 export function LocationSetup({ navigation }: LocationSetupProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const [isModalVisible, setIsModalVisible] = useState(false); 
   const [locationData, setLocationData] = useState<any>(null);
@@ -30,9 +32,8 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
   const signupParams = route.params;
 
   const handleAddressSelect = (data: any) => {
-    console.log("모달에서 받은 데이터:", data);
-
     if (!data) return;
+    setErrorMessage('');
 
     const selectedAddress = data.address || data.roadAddress || '';
     setSearchQuery(selectedAddress);
@@ -68,9 +69,9 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
     //   return;
     // }
 
-    if (signupParams) {
-      const { name, email, password } = signupParams;
+    setErrorMessage('');
 
+    if (signupParams?.fromSignup) {
       setIsLoading(true);
       try {
         const mockLocation = {
@@ -82,28 +83,12 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
           longitude: 126.8801,     // (longitude)
         };
 
-        // 백엔드 회원가입 API 호출
-        await memberApi.signup({
-          email,
-          password,
-          name,
-          location: locationData || mockLocation , // 실제 위치 데이터가 없을 때는 mockLocation 사용
-        });
+        await memberApi.updateLocation(locationData || mockLocation);
 
-        Alert.alert('성공', '회원가입이 완료되었습니다! 로그인해 주세요.', [
-          {
-            text: '확인',
-            onPress: () => {
-              // 가입 완료 후 로그인 화면으로 이동
-              navigation.replace('EmailLoginScreen');
-            },
-          },
-        ]);
-      } catch (error: any) {
-        console.error('회원가입 에러:', error);
-        const errorMessage =
-          error.response?.data?.message || '회원가입에 실패했습니다. 다시 시도해 주세요.';
-        Alert.alert('회원가입 실패', errorMessage);
+        navigation.replace('MainTabs');
+      } catch (error: unknown) {
+        console.warn('위치 저장 실패:', getErrorStatus(error));
+        setErrorMessage('위치 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
       } finally {
         setIsLoading(false);
       }
@@ -154,6 +139,8 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
           지역 기후와 토양 조건에 맞는 작물을 추천해드립니다.
         </Text>
 
+        <FormErrorMessage message={errorMessage} />
+
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
@@ -161,7 +148,7 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
             activeOpacity={0.8}
           >
             <Navigation size={20} color="#FFFFFF" />
-            <Text style={styles.primaryButtonText}>현재 위치 사용하기</Text>
+            {isLoading ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>현재 위치 사용하기</Text>}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -169,8 +156,8 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
             onPress={handleCompleteSignup}
             activeOpacity={0.8}
           >
-            <Text style={styles.secondaryButtonText}>계속하기</Text>
-            <ChevronRight size={20} color="#333333" />
+            {isLoading ? <ActivityIndicator color="#4CAF50" /> : <Text style={styles.secondaryButtonText}>계속하기</Text>}
+            {!isLoading && <ChevronRight size={20} color="#333333" />}
           </TouchableOpacity>
         </View>
       </View>

@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { memberApi } from '../apis/member'; // 상대 경로가 맞는지 확인해 주세요.
+import { memberApi } from '../apis/member';
+import { FormErrorMessage } from './FormErrorMessage';
+import { getAuthErrorMessage, getErrorStatus } from '../utils/authErrorMessage';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 interface EmailLoginScreenProps {
@@ -22,11 +23,14 @@ export function EmailLoginScreen({ navigation }: EmailLoginScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = async () => {
     // 1. 유효성 검사
+    setErrorMessage('');
+
     if (!email.trim() || !password.trim()) {
-      Alert.alert('알림', '이메일과 비밀번호를 모두 입력해 주세요.');
+      setErrorMessage('이메일과 비밀번호를 모두 입력해 주세요.');
       return;
     }
 
@@ -43,22 +47,13 @@ export function EmailLoginScreen({ navigation }: EmailLoginScreenProps) {
         // 3. 토큰 로컬 저장
         await AsyncStorage.setItem('userToken', token);
         
-        Alert.alert('성공', '로그인에 성공했습니다.', [
-          {
-            text: '확인',
-            onPress: () => {
-              navigation.replace('MainTabs');
-            },
-          },
-        ]);
+        navigation.replace('MainTabs');
       } else {
-        Alert.alert('오류', '토큰 정보를 가져오지 못했습니다.');
+        setErrorMessage('로그인 응답을 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.');
       }
-    } catch (error: any) {
-      console.error('로그인 에러:', error);
-      // 백엔드 에러 응답 처리 (예: 비밀번호 불일치 등)
-      const errorMessage = error.response?.data?.message || '로그인에 실패했습니다. 이메일과 비밀번호를 확인해 주세요.';
-      Alert.alert('로그인 실패', errorMessage);
+    } catch (error: unknown) {
+      console.warn('로그인 실패:', getErrorStatus(error));
+      setErrorMessage(getAuthErrorMessage(error, 'login'));
     } finally {
       setIsLoading(false);
     }
@@ -102,6 +97,8 @@ export function EmailLoginScreen({ navigation }: EmailLoginScreenProps) {
             value={password}
             onChangeText={setPassword}
           />
+
+          <FormErrorMessage message={errorMessage} />
 
           {/* 로그인 버튼 */}
           <TouchableOpacity

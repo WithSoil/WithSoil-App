@@ -1,8 +1,10 @@
 import { apiClient, ApiResponse } from './apiClient';
 
 export interface MemberLocation {
-  city?: string;
-  district?: string;
+  sido: string;
+  sigungu: string;
+  eupMyeonDong?: string;
+  ri?: string;
   latitude?: number;
   longitude?: number;
 }
@@ -11,14 +13,12 @@ export interface MemberSignupRequest {
   email: string;
   password?: string; 
   name: string;
-  location: MemberLocation;
 }
 
 export interface MemberSignupResponse {
   id: number;
   email: string;
   name: string;
-  location: MemberLocation;
 }
 
 export interface MemberLoginRequest {
@@ -34,7 +34,6 @@ export interface MemberMypageResponse {
   id: number;
   email: string;
   name: string;
-  location: MemberLocation;
 }
 
 export const memberApi = {
@@ -51,6 +50,11 @@ export const memberApi = {
 
   getMypage: async (): Promise<ApiResponse<MemberMypageResponse>> => {
     const response = await apiClient.get<ApiResponse<MemberMypageResponse>>('/api/v1/members/mypage');
+    return response.data;
+  },
+
+  updateLocation: async (data: MemberLocation): Promise<ApiResponse<MemberLocation>> => {
+    const response = await apiClient.patch<ApiResponse<MemberLocation>>('/api/v1/members/location', data);
     return response.data;
   },
 };
