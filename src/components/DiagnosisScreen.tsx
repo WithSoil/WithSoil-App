@@ -146,7 +146,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
-            onPress={() => navigation.navigate('Logbook')}
+            onPress={() => navigation.navigate('FarmDiary')}
           >
             <Text style={styles.primaryButtonText}>일지에 진단 기록 저장</Text>
           </TouchableOpacity>

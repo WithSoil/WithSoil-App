@@ -12,7 +12,7 @@ import { LocationSetup } from './src/components/LocationSetup';
 import { MainScreen } from './src/components/MainScreen';
 import { CropDetailScreen } from './src/components/CropDetailScreen';
 import { DiagnosisScreen } from './src/components/DiagnosisScreen';
-import { LogbookScreen } from './src/components/LogbookScreen';
+import { FarmDiaryScreen } from './src/components/FarmDiaryScreen';
 import { ChatbotScreen } from './src/components/ChatbotScreen';
 import { ProfileScreen } from './src/components/ProfileScreen';
 
@@ -33,7 +33,7 @@ export type RootStackParamList = {
 export type TabParamList = {
   Home: undefined;
   Diagnosis: undefined;
-  Logbook: undefined;
+  FarmDiary: undefined;
   Profile: undefined;
 };
 
@@ -67,8 +67,8 @@ function MainTabNavigator() {
         }}
       />
       <Tab.Screen 
-        name="Logbook" 
-        component={LogbookScreen} 
+        name="FarmDiary" 
+        component={FarmDiaryScreen} 
         options={{
           tabBarLabel: '일지',
           tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />
