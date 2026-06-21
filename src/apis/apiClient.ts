@@ -26,6 +26,18 @@ export const apiClient = axios.create({
 });
 
 
+const PUBLIC_API_PATHS = [
+  '/api/v1/members/signup',
+  '/api/v1/members/login',
+];
+
+const isPublicApiPath = (url?: string) => {
+  if (!url) {
+    return false;
+  }
+  return PUBLIC_API_PATHS.some((path) => url.includes(path));
+};
+
 apiClient.interceptors.request.use(
   async (config) => {
     config.headers['ngrok-skip-browser-warning'] = 'true';
