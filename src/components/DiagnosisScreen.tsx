@@ -35,7 +35,7 @@ import { aiApi, AiDiagnosisResponseDto } from '../apis/ai';
 
 type DiagnosisState = 'camera' | 'crop-selection' | 'low-confidence' | 'healthy' | 'result';
 
-const MIN_DIAGNOSIS_CONFIDENCE = 0.8;
+const MIN_DIAGNOSIS_CONFIDENCE = 0.9;
 
 export const getDiagnosisState = (result: AiDiagnosisResponseDto): DiagnosisState => {
   if (result.confidence <= MIN_DIAGNOSIS_CONFIDENCE || result.resultType === 'low_confidence') {
