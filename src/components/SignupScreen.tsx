@@ -7,10 +7,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
-  Alert,
-  ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { memberApi } from '../apis/member';
+import { FormErrorMessage } from './FormErrorMessage';
+import { getAuthErrorMessage, getErrorStatus } from '../utils/authErrorMessage';
 
 interface SignupScreenProps {
   navigation: any;
@@ -21,39 +24,63 @@ export function SignupScreen({ navigation }: SignupScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleNextStep = () => {
+  const handleNextStep = async () => {
+    setErrorMessage('');
+
     // 1. 공백 유효성 검사
     if (!name.trim() || !email.trim() || !password.trim() || !passwordConfirm.trim()) {
-      Alert.alert('알림', '모든 필드를 입력해 주세요.');
+      setErrorMessage('모든 필드를 입력해 주세요.');
       return;
     }
 
     // 2. 이메일 형식 간단 검사
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      Alert.alert('알림', '올바른 이메일 형식을 입력해 주세요.');
+      setErrorMessage('올바른 이메일 형식을 입력해 주세요.');
       return;
     }
 
     // 3. 비밀번호 길이 검사 (백엔드 스펙: 8자 이상 64자 이하)
     if (password.length < 8 || password.length > 64) {
-      Alert.alert('알림', '비밀번호는 8자 이상 64자 이하로 설정해 주세요.');
+      setErrorMessage('비밀번호는 8자 이상 64자 이하로 설정해 주세요.');
       return;
     }
 
     // 4. 비밀번호 일치 확인
     if (password !== passwordConfirm) {
-      Alert.alert('알림', '비밀번호가 일치하지 않습니다.');
+      setErrorMessage('비밀번호가 일치하지 않습니다.');
       return;
     }
 
-    // 5. 위치 설정 화면(LocationSetup)으로 가면서 지금까지 입력한 정보들을 파라미터로 넘깁니다.
-    navigation.navigate('LocationSetup', {
-      name,
-      email,
-      password,
-    });
+    setIsLoading(true);
+    try {
+      await memberApi.signup({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+
+      const loginResponse = await memberApi.login({
+        email: email.trim(),
+        password,
+      });
+      const token = loginResponse.data?.accessToken;
+      if (!token) {
+        setErrorMessage('회원가입은 완료됐지만 로그인 정보를 확인할 수 없습니다. 로그인 화면에서 다시 로그인해 주세요.');
+        return;
+      }
+
+      await AsyncStorage.setItem('userToken', token);
+      navigation.replace('LocationSetup', { fromSignup: true });
+    } catch (error: unknown) {
+      console.warn('회원가입 실패:', getErrorStatus(error));
+      setErrorMessage(getAuthErrorMessage(error, 'signup'));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -76,7 +103,7 @@ export function SignupScreen({ navigation }: SignupScreenProps) {
             placeholder="김농부"
             placeholderTextColor="#888888"
             value={name}
-            onChangeText={setName}
+            onChangeText={(value) => { setName(value); setErrorMessage(''); }}
           />
 
           <Text style={styles.label}>이메일 주소</Text>
@@ -87,7 +114,7 @@ export function SignupScreen({ navigation }: SignupScreenProps) {
             keyboardType="email-address"
             autoCapitalize="none"
             value={email}
-            onChangeText={setEmail}
+            onChangeText={(value) => { setEmail(value); setErrorMessage(''); }}
           />
 
           <Text style={styles.label}>비밀번호 (8자 이상)</Text>
@@ -98,7 +125,7 @@ export function SignupScreen({ navigation }: SignupScreenProps) {
             secureTextEntry
             autoCapitalize="none"
             value={password}
-            onChangeText={setPassword}
+            onChangeText={(value) => { setPassword(value); setErrorMessage(''); }}
           />
 
           <Text style={styles.label}>비밀번호 확인</Text>
@@ -109,15 +136,22 @@ export function SignupScreen({ navigation }: SignupScreenProps) {
             secureTextEntry
             autoCapitalize="none"
             value={passwordConfirm}
-            onChangeText={setPasswordConfirm}
+            onChangeText={(value) => { setPasswordConfirm(value); setErrorMessage(''); }}
           />
 
+          <FormErrorMessage message={errorMessage} />
+
           <TouchableOpacity
-            style={styles.nextButton}
+            style={[styles.nextButton, isLoading && styles.nextButtonDisabled]}
             onPress={handleNextStep}
+            disabled={isLoading}
             activeOpacity={0.8}
           >
-            <Text style={styles.nextButtonText}>다음 단계로 (위치 설정)</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.nextButtonText}>회원가입 후 위치 설정</Text>
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>
@@ -181,6 +215,9 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  nextButtonDisabled: {
+    opacity: 0.65,
   },
   nextButtonText: {
     color: '#FFFFFF',
