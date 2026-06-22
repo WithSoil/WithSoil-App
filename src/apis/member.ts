@@ -34,6 +34,7 @@ export interface MemberMypageResponse {
   id: number;
   email: string;
   name: string;
+  location?: MemberLocation;
 }
 
 export const memberApi = {
