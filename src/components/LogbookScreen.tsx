@@ -18,6 +18,7 @@ import {
 import {
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Plus,
   Camera,
   Calendar as CalendarIcon,
@@ -75,10 +76,15 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
   const today = useMemo(() => new Date(), []);
   const { width: screenWidth } = useWindowDimensions();
   const dateScrollRef = useRef<ScrollView>(null);
+  const yearPickerRef = useRef<ScrollView>(null);
+  const monthPickerRef = useRef<ScrollView>(null);
 
   const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [pickerMonth, setPickerMonth] = useState(today.getMonth());
   const [selectedWorks, setSelectedWorks] = useState<string[]>([]);
   const [customWork, setCustomWork] = useState('');
   const [notes, setNotes] = useState('');
@@ -104,6 +110,11 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
   const dateItemGap = 8;
   const dateItemStep = dateItemWidth + dateItemGap;
   const dateListSidePadding = Math.max(24, (screenWidth - dateItemWidth) / 2);
+  const yearOptions = useMemo(
+    () => Array.from({ length: 21 }, (_, i) => today.getFullYear() - 10 + i),
+    [today]
+  );
+  const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => i), []);
 
   const imageSource = (uri: string) => ({
     uri: `${apiClient.defaults.baseURL}${uri}`,
@@ -162,6 +173,18 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
     }
   }, [editMode, existingData]);
 
+  useEffect(() => {
+    if (!showMonthPicker) {
+      return;
+    }
+
+    const selectedYearIndex = Math.max(0, yearOptions.indexOf(pickerYear));
+    requestAnimationFrame(() => {
+      yearPickerRef.current?.scrollTo({ y: selectedYearIndex * 44, animated: false });
+      monthPickerRef.current?.scrollTo({ y: pickerMonth * 44, animated: false });
+    });
+  }, [showMonthPicker, pickerYear, pickerMonth, yearOptions]);
+
   const changeMonth = (offset: number) => {
     const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
     const nextSelectedDay = Math.min(selectedDate.getDate(), getDaysInMonth(nextMonth));
@@ -171,6 +194,20 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
 
   const selectDay = (day: number) => {
     setSelectedDate(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day));
+  };
+
+  const openMonthPicker = () => {
+    setPickerYear(currentMonth.getFullYear());
+    setPickerMonth(currentMonth.getMonth());
+    setShowMonthPicker(true);
+  };
+
+  const applyMonthPicker = () => {
+    const nextMonth = new Date(pickerYear, pickerMonth, 1);
+    const nextSelectedDay = Math.min(selectedDate.getDate(), getDaysInMonth(nextMonth));
+    setCurrentMonth(nextMonth);
+    setSelectedDate(new Date(pickerYear, pickerMonth, nextSelectedDay));
+    setShowMonthPicker(false);
   };
 
   const toggleWork = (label: string) => {
@@ -273,6 +310,55 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
     }
   };
 
+  const renderSelectedDateDiaries = () => {
+    if (editMode) {
+      return null;
+    }
+
+    return (
+      <View style={styles.selectedDiarySection}>
+        <Text style={styles.sectionTitle}>{selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 기록</Text>
+        {loading && selectedDateDiaries.length === 0 ? (
+          <ActivityIndicator color="#4CAF50" />
+        ) : selectedDateDiaries.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>선택한 날짜에 기록된 일지가 없습니다.</Text>
+          </View>
+        ) : (
+          selectedDateDiaries.map((diary) => (
+            <TouchableOpacity
+              key={diary.id}
+              style={styles.diaryCard}
+              onPress={() => navigation.navigate('DiaryDetailScreen', { diaryId: diary.id })}
+            >
+              <View style={styles.diaryCardHeader}>
+                <Text style={styles.diaryDate}>{formatKoreanDateTime(diary.diaryDateTime)}</Text>
+                <Text style={styles.diaryCount}>{diary.photos?.length || 0}장</Text>
+              </View>
+              {diary.works?.length > 0 && (
+                <View style={styles.diaryWorksWrap}>
+                  {diary.works.map((work: string) => (
+                    <View key={`${diary.id}-${work}`} style={styles.diaryWorkChip}>
+                      <Text style={styles.diaryWorkChipText}>{work}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <Text style={styles.diaryPreview} numberOfLines={3}>{createPreview(diary)}</Text>
+              {diary.photos?.length > 0 && (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedPhotoList}>
+                  {diary.photos.map((photo: any) => (
+                    <Image key={photo.id} source={imageSource(photo.imageUrl)} style={styles.savedPhotoImage} />
+                  ))}
+                </ScrollView>
+              )}
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
@@ -344,7 +430,10 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
         </TouchableWithoutFeedback>
         <View style={styles.calendarModal}>
           <View style={styles.calendarModalHeader}>
-            <Text style={styles.calendarModalTitle}>{monthTitle}</Text>
+            <TouchableOpacity activeOpacity={0.75} onPress={openMonthPicker} style={styles.calendarTitleButton}>
+              <Text style={styles.calendarModalTitle}>{monthTitle}</Text>
+              <ChevronDown size={18} color="#4CAF50" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowCalendar(false)} style={styles.iconButtonSmall}>
               <X size={20} color="#000" />
             </TouchableOpacity>
@@ -372,12 +461,56 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
         </View>
       </Modal>
 
+      <Modal visible={showMonthPicker} transparent={true} animationType="slide">
+        <TouchableWithoutFeedback onPress={() => setShowMonthPicker(false)}>
+          <View style={styles.monthPickerOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={styles.monthPickerSheet}>
+          <View style={styles.monthPickerHeader}>
+            <TouchableOpacity onPress={() => setShowMonthPicker(false)}>
+              <Text style={styles.monthPickerCancel}>취소</Text>
+            </TouchableOpacity>
+            <Text style={styles.monthPickerTitle}>연도와 월 선택</Text>
+            <TouchableOpacity onPress={applyMonthPicker}>
+              <Text style={styles.monthPickerDone}>완료</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.monthPickerColumns}>
+            <ScrollView ref={yearPickerRef} showsVerticalScrollIndicator={false} style={styles.monthPickerColumn}>
+              {yearOptions.map((year) => {
+                const isSelected = pickerYear === year;
+                return (
+                  <TouchableOpacity key={year} style={styles.monthPickerOption} onPress={() => setPickerYear(year)}>
+                    <Text style={[styles.monthPickerOptionText, isSelected && styles.monthPickerOptionTextSelected]}>
+                      {year}년
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <ScrollView ref={monthPickerRef} showsVerticalScrollIndicator={false} style={styles.monthPickerColumn}>
+              {monthOptions.map((month) => {
+                const isSelected = pickerMonth === month;
+                return (
+                  <TouchableOpacity key={month} style={styles.monthPickerOption} onPress={() => setPickerMonth(month)}>
+                    <Text style={[styles.monthPickerOptionText, isSelected && styles.monthPickerOptionTextSelected]}>
+                      {month + 1}월
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView
         style={styles.mainContent}
         contentContainerStyle={styles.mainContentPadding}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor="#4CAF50" />}
       >
-        <Text style={styles.sectionTitle}>오늘 한 일</Text>
+        {renderSelectedDateDiaries()}
+
         <View style={styles.customTaskRow}>
           <TextInput
             style={styles.customTaskInput}
@@ -444,57 +577,8 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
           onChangeText={setNotes}
         />
 
-        <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={handleSaveDiary} disabled={saving}>
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.saveButtonText}>{editMode ? '일지 수정 완료' : '일지 저장'}</Text>
-          )}
-        </TouchableOpacity>
-
         {!editMode && (
           <>
-            <View style={styles.diarySection}>
-              <Text style={styles.sectionTitle}>{selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 기록</Text>
-              {loading && selectedDateDiaries.length === 0 ? (
-                <ActivityIndicator color="#4CAF50" />
-              ) : selectedDateDiaries.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <Text style={styles.emptyText}>선택한 날짜에 기록된 일지가 없습니다.</Text>
-                </View>
-              ) : (
-                selectedDateDiaries.map((diary) => (
-                  <TouchableOpacity
-                    key={diary.id}
-                    style={styles.diaryCard}
-                    onPress={() => navigation.navigate('DiaryDetailScreen', { diaryId: diary.id })}
-                  >
-                    <View style={styles.diaryCardHeader}>
-                      <Text style={styles.diaryDate}>{formatKoreanDateTime(diary.diaryDateTime)}</Text>
-                      <Text style={styles.diaryCount}>{diary.photos?.length || 0}장</Text>
-                    </View>
-                    {diary.works?.length > 0 && (
-                      <View style={styles.diaryWorksWrap}>
-                        {diary.works.map((work: string) => (
-                          <View key={`${diary.id}-${work}`} style={styles.diaryWorkChip}>
-                            <Text style={styles.diaryWorkChipText}>{work}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-                    <Text style={styles.diaryPreview} numberOfLines={3}>{createPreview(diary)}</Text>
-                    {diary.photos?.length > 0 && (
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedPhotoList}>
-                        {diary.photos.map((photo: any) => (
-                          <Image key={photo.id} source={imageSource(photo.imageUrl)} style={styles.savedPhotoImage} />
-                        ))}
-                      </ScrollView>
-                    )}
-                  </TouchableOpacity>
-                ))
-              )}
-            </View>
-
             <View style={styles.diarySection}>
               <Text style={styles.sectionTitle}>이번 달 전체 일지</Text>
               {monthlyDiaries.length === 0 ? (
@@ -529,6 +613,16 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
           </>
         )}
       </ScrollView>
+
+      <View style={styles.saveButtonFooter}>
+        <TouchableOpacity style={[styles.saveButton, saving && styles.saveButtonDisabled]} onPress={handleSaveDiary} disabled={saving}>
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.saveButtonText}>{editMode ? '일지 수정 완료' : '일지 저장'}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -560,15 +654,27 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   calendarModal: { width: '85%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, elevation: 20, position: 'absolute', alignSelf: 'center', top: '18%' },
   calendarModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
-  calendarModalTitle: { fontSize: 20, fontWeight: '600' },
+  calendarTitleButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F1F8E9', borderWidth: 1, borderColor: 'rgba(76, 175, 80, 0.25)', borderRadius: 18, paddingVertical: 8, paddingLeft: 14, paddingRight: 10 },
+  calendarModalTitle: { fontSize: 20, fontWeight: '700', color: '#111' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarDayHeader: { width: '14.28%', textAlign: 'center', fontSize: 12, color: '#888', fontWeight: '600', paddingVertical: 8 },
   calendarCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   calendarCellText: { fontSize: 14, color: '#333' },
   calendarCellTextSelected: { fontWeight: 'bold', color: '#4CAF50' },
   logDot: { position: 'absolute', bottom: 6, width: 4, height: 4, borderRadius: 2, backgroundColor: '#4CAF50' },
+  monthPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+  monthPickerSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 28 },
+  monthPickerHeader: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EAEAEE' },
+  monthPickerCancel: { fontSize: 15, color: '#777', fontWeight: '600' },
+  monthPickerTitle: { fontSize: 16, color: '#111', fontWeight: '700' },
+  monthPickerDone: { fontSize: 15, color: '#4CAF50', fontWeight: '700' },
+  monthPickerColumns: { height: 216, flexDirection: 'row', paddingHorizontal: 32, paddingTop: 12, gap: 16 },
+  monthPickerColumn: { flex: 1 },
+  monthPickerOption: { height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14 },
+  monthPickerOptionText: { fontSize: 18, color: '#777', fontWeight: '500' },
+  monthPickerOptionTextSelected: { color: '#111', fontSize: 22, fontWeight: '800' },
   mainContent: { flex: 1, backgroundColor: '#FAFAFA' },
-  mainContentPadding: { padding: 24, paddingBottom: 40 },
+  mainContentPadding: { padding: 24, paddingBottom: 32 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#000', marginBottom: 12 },
   customTaskRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   customTaskInput: { flex: 1, height: 48, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#EAEAEE', paddingHorizontal: 14, fontSize: 14, color: '#111' },
@@ -583,11 +689,13 @@ const styles = StyleSheet.create({
   photoPreviewItem: { width: 88, height: 88, borderRadius: 16, overflow: 'hidden', position: 'relative', backgroundColor: '#E8F5E9' },
   photoPreviewImage: { width: '100%', height: '100%' },
   removePhotoButton: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
-  notesInput: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#EAEAEE', borderRadius: 20, padding: 16, height: 120, fontSize: 15, color: '#000', marginBottom: 24 },
+  notesInput: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#EAEAEE', borderRadius: 20, padding: 16, height: 120, fontSize: 15, color: '#000', marginBottom: 12 },
+  saveButtonFooter: { backgroundColor: '#FAFAFA', paddingHorizontal: 24, paddingTop: 12, paddingBottom: 14, borderTopWidth: 1, borderTopColor: '#EAEAEE' },
   saveButton: { height: 56, backgroundColor: '#4CAF50', borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: '#4CAF50', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, elevation: 4 },
   saveButtonDisabled: { opacity: 0.65 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  diarySection: { marginTop: 32 },
+  selectedDiarySection: { marginBottom: 12 },
+  diarySection: { marginTop: 12 },
   emptyCard: { minHeight: 72, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EAEAEE', borderRadius: 18, alignItems: 'center', justifyContent: 'center', padding: 16 },
   emptyText: { color: '#777', fontSize: 14 },
   diaryCard: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EAEAEE', borderRadius: 20, padding: 16, marginBottom: 12 },
