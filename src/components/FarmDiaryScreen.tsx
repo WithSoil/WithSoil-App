@@ -34,7 +34,7 @@ import profileImage from '../assets/image.png';
 import { diaryApi } from '../apis/diary';
 import { apiClient } from '../apis/apiClient';
 
-interface LogbookScreenProps {
+interface FarmDiaryScreenProps {
   navigation: any;
   route?: any;
 }
@@ -72,7 +72,7 @@ const createPreview = (diary: any) => {
   return '기록된 내용이 없습니다.';
 };
 
-export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
+export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
   const today = useMemo(() => new Date(), []);
   const { width: screenWidth } = useWindowDimensions();
   const dateScrollRef = useRef<ScrollView>(null);
@@ -290,7 +290,7 @@ export function LogbookScreen({ navigation, route }: LogbookScreenProps) {
           {
             text: '확인',
             onPress: () => {
-              navigation.navigate('LogbookScreen', { editMode: false, existingData: null });
+              navigation.navigate('FarmDiary', { editMode: false, existingData: null });
               refresh();
             },
           },

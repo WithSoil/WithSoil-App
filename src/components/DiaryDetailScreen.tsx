@@ -36,7 +36,7 @@ interface DiaryDetailScreenProps {
 }
 
 export function DiaryDetailScreen({ route, navigation }: DiaryDetailScreenProps) {
-  // LogbookScreen에서 네비게이션으로 넘겨줄 일지 ID
+  // FarmDiaryScreen에서 네비게이션으로 넘겨줄 일지 ID
   const { diaryId } = route.params;
 
   const [diary, setDiary] = useState<any>(null);
@@ -100,7 +100,7 @@ export function DiaryDetailScreen({ route, navigation }: DiaryDetailScreenProps)
 
   const handleEdit = () => {
     setShowMenu(false);
-    navigation.navigate('LogbookScreen', {
+    navigation.navigate('FarmDiary', {
       editMode: true,      
       diaryId: diary.id,     
       existingData: diary, 
