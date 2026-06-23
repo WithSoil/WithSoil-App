@@ -26,6 +26,8 @@ import {
 import profileImage from '../assets/image.png'; // 실제 경로에 맞게 주석 해제
 import { WebView } from 'react-native-webview';
 import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation';
+import { getExpoPushToken } from '../utils/pushNotifications';
+import { memberApi } from '../apis/member';
 
 interface MainScreenProps {
   navigation: any;
@@ -65,6 +67,21 @@ export function MainScreen({ navigation }: MainScreenProps) {
   useEffect(() => {
     updateCurrentLocation();
   }, [updateCurrentLocation]);
+
+  useEffect(() => {
+    const registerPushToken = async () => {
+      try {
+        const pushToken = await getExpoPushToken();
+        if (pushToken) {
+          await memberApi.updatePushToken(pushToken);
+        }
+      } catch (error: unknown) {
+        console.warn('푸시 알림 등록 실패:', error);
+      }
+    };
+
+    registerPushToken();
+  }, []);
 
   const mapHtml = currentLocation ? `
     <!DOCTYPE html>
