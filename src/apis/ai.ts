@@ -2,9 +2,37 @@
 import { apiClient } from './apiClient';
 
 export interface AiChatResponseDto {
+  chatId: number;
+  title: string;
   status: string;
   answer: string;
+  messageDateTime: string;
 }
+
+export interface AiChatSummaryResponseDto {
+  chatId: number;
+  title: string;
+  chatDateTime: string;
+  lastMessage: string | null;
+  lastMessageDateTime: string | null;
+}
+
+export type AiChatMessageRole = 'USER' | 'ASSISTANT';
+
+export interface AiChatMessageResponseDto {
+  id: number;
+  role: AiChatMessageRole;
+  content: string;
+  messageDateTime: string;
+}
+
+export interface AiChatDetailResponseDto {
+  chatId: number;
+  title: string;
+  chatDateTime: string;
+  messages: AiChatMessageResponseDto[];
+}
+
 export interface AiDiagnosisResponseDto {
   status: string;
   crop: string;
@@ -16,21 +44,37 @@ export interface AiDiagnosisResponseDto {
 
 export const aiApi = {
 
-  sendChatQuery: async (query: string): Promise<AiChatResponseDto> => {
+  sendChatQuery: async (query: string, chatId?: number): Promise<AiChatResponseDto> => {
 
     const response = await apiClient.post<AiChatResponseDto>('/api/v1/ai/chat', {
+      ...(chatId ? { chatId } : {}),
       query,
     });
     
     return response.data;
   },
 
+  sendChatQueryWithImage: async (formData: FormData): Promise<AiChatResponseDto> => {
+    const response = await apiClient.post<AiChatResponseDto>('/api/v1/ai/chat/image', formData);
+    return response.data;
+  },
+
+  getChatHistories: async (): Promise<AiChatSummaryResponseDto[]> => {
+    const response = await apiClient.get<AiChatSummaryResponseDto[]>('/api/v1/ai/chats');
+    return response.data;
+  },
+
+  getChatHistory: async (chatId: number): Promise<AiChatDetailResponseDto> => {
+    const response = await apiClient.get<AiChatDetailResponseDto>(`/api/v1/ai/chats/${chatId}`);
+    return response.data;
+  },
+
+  deleteChatHistory: async (chatId: number): Promise<void> => {
+    await apiClient.delete(`/api/v1/ai/chats/${chatId}`);
+  },
+
   diagnoseCrop: async (formData: FormData): Promise<AiDiagnosisResponseDto> => {
-    const response = await apiClient.post<AiDiagnosisResponseDto>('/api/v1/ai/diagnose', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post<AiDiagnosisResponseDto>('/api/v1/ai/diagnose', formData);
     return response.data;
   },
 };
