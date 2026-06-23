@@ -54,6 +54,12 @@ const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMont
 
 const getMonthStartOffset = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 
+const isSameDate = (left: Date, right: Date) => (
+  left.getFullYear() === right.getFullYear()
+  && left.getMonth() === right.getMonth()
+  && left.getDate() === right.getDate()
+);
+
 const formatKoreanDateTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -401,8 +407,10 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
           contentContainerStyle={[styles.dateScroll, { paddingHorizontal: dateListSidePadding }]}
         >
           {daysInMonth.map((date) => {
+            const dateObject = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), date);
             const hasLog = loggedDays.has(date);
-            const isSelected = selectedDate.getDate() === date;
+            const isSelected = isSameDate(selectedDate, dateObject);
+            const isToday = isSameDate(today, dateObject);
 
             return (
               <TouchableOpacity
@@ -411,13 +419,22 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
                 style={[
                   styles.dateItem,
                   hasLog ? styles.dateItemLogged : styles.dateItemNormal,
-                  isSelected && !hasLog && styles.dateItemSelectedNormal,
-                  isSelected && hasLog && styles.dateItemSelectedLogged,
+                  isToday && !isSelected && styles.dateItemToday,
+                  isSelected && styles.dateItemSelected,
+                  isSelected && isToday && styles.dateItemSelectedToday,
                 ]}
               >
-                <Text style={[styles.dateText, isSelected || hasLog ? styles.dateTextSelected : styles.dateTextNormal]}>
+                <Text style={[
+                  styles.dateText,
+                  hasLog && !isSelected && styles.dateTextLogged,
+                  isToday && !isSelected && styles.dateTextToday,
+                  isSelected ? styles.dateTextSelected : styles.dateTextNormal,
+                ]}>
                   {date}
                 </Text>
+                {hasLog && (
+                  <View style={[styles.dateLogDot, isSelected && styles.dateLogDotSelected]} />
+                )}
               </TouchableOpacity>
             );
           })}
@@ -446,16 +463,38 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
               <View key={`empty-${i}`} style={styles.calendarCell} />
             ))}
             {calendarDays.map(({ date, hasLog }) => (
-              <TouchableOpacity
-                key={date}
-                onPress={() => { selectDay(date); setShowCalendar(false); }}
-                style={styles.calendarCell}
-              >
-                <Text style={[styles.calendarCellText, selectedDate.getDate() === date && styles.calendarCellTextSelected]}>
-                  {date}
-                </Text>
-                {hasLog && <View style={styles.logDot} />}
-              </TouchableOpacity>
+              (() => {
+                const dateObject = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), date);
+                const isSelected = isSameDate(selectedDate, dateObject);
+                const isToday = isSameDate(today, dateObject);
+
+                return (
+                  <TouchableOpacity
+                    key={date}
+                    onPress={() => { selectDay(date); setShowCalendar(false); }}
+                    style={styles.calendarCell}
+                  >
+                    <View style={[
+                      styles.calendarDateBadge,
+                      hasLog && !isSelected && styles.calendarDateBadgeLogged,
+                      isToday && !isSelected && styles.calendarDateBadgeToday,
+                      isSelected && styles.calendarDateBadgeSelected,
+                    ]}>
+                      <Text style={[
+                        styles.calendarCellText,
+                        hasLog && !isSelected && styles.calendarCellTextLogged,
+                        isToday && !isSelected && styles.calendarCellTextToday,
+                        isSelected && styles.calendarCellTextSelected,
+                      ]}>
+                        {date}
+                      </Text>
+                      {hasLog && (
+                        <View style={[styles.logDot, isSelected && styles.logDotSelected]} />
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })()
             ))}
           </View>
         </View>
@@ -643,14 +682,19 @@ const styles = StyleSheet.create({
   monthTitle: { fontSize: 16, fontWeight: '600', color: '#000' },
   calendarButton: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(76, 175, 80, 0.1)', justifyContent: 'center', alignItems: 'center' },
   dateScroll: { gap: 8 },
-  dateItem: { minWidth: 48, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  dateItem: { minWidth: 48, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   dateItemNormal: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EAEAEE' },
-  dateItemLogged: { backgroundColor: '#4CAF50', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 2 },
-  dateItemSelectedNormal: { backgroundColor: '#4CAF50', borderWidth: 1, borderColor: '#4CAF50' },
-  dateItemSelectedLogged: { borderWidth: 2, borderColor: '#1B5E20' },
+  dateItemLogged: { backgroundColor: '#E8F5E9', borderWidth: 1, borderColor: '#C8E6C9' },
+  dateItemToday: { borderWidth: 2, borderColor: '#4CAF50', backgroundColor: '#FFF' },
+  dateItemSelected: { backgroundColor: '#4CAF50', borderWidth: 1, borderColor: '#4CAF50', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, elevation: 2 },
+  dateItemSelectedToday: { borderWidth: 2, borderColor: '#1B5E20' },
   dateText: { fontSize: 16, fontWeight: '600' },
   dateTextNormal: { color: '#000' },
+  dateTextLogged: { color: '#2E7D32' },
+  dateTextToday: { color: '#2E7D32' },
   dateTextSelected: { color: '#FFF' },
+  dateLogDot: { position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: 2, backgroundColor: '#4CAF50' },
+  dateLogDotSelected: { backgroundColor: '#FFF' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   calendarModal: { width: '85%', backgroundColor: '#FFF', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, elevation: 20, position: 'absolute', alignSelf: 'center', top: '18%' },
   calendarModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
@@ -658,10 +702,17 @@ const styles = StyleSheet.create({
   calendarModalTitle: { fontSize: 20, fontWeight: '700', color: '#111' },
   calendarGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calendarDayHeader: { width: '14.28%', textAlign: 'center', fontSize: 12, color: '#888', fontWeight: '600', paddingVertical: 8 },
-  calendarCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  calendarCell: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  calendarDateBadge: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  calendarDateBadgeLogged: { backgroundColor: '#E8F5E9' },
+  calendarDateBadgeToday: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#4CAF50' },
+  calendarDateBadgeSelected: { backgroundColor: '#4CAF50' },
   calendarCellText: { fontSize: 14, color: '#333' },
-  calendarCellTextSelected: { fontWeight: 'bold', color: '#4CAF50' },
-  logDot: { position: 'absolute', bottom: 6, width: 4, height: 4, borderRadius: 2, backgroundColor: '#4CAF50' },
+  calendarCellTextLogged: { color: '#2E7D32', fontWeight: '700' },
+  calendarCellTextToday: { color: '#2E7D32', fontWeight: '700' },
+  calendarCellTextSelected: { fontWeight: 'bold', color: '#FFF' },
+  logDot: { position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: 2, backgroundColor: '#4CAF50' },
+  logDotSelected: { backgroundColor: '#FFF' },
   monthPickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
   monthPickerSheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 28 },
   monthPickerHeader: { height: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EAEAEE' },
