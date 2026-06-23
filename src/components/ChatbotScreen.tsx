@@ -15,6 +15,7 @@ import {
   Alert,
 } from 'react-native';
 import { ArrowLeft, Send, Image as ImageIcon, Clock, X, Plus, Trash2 } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import profileImage from '../assets/image.png';
 import { AiChatSummaryResponseDto, aiApi } from '../apis/ai';
 
@@ -25,6 +26,7 @@ interface ChatbotScreenProps {
 type ChatMessage = {
   role: 'user' | 'ai';
   content: string;
+  imageUri?: string;
 };
 
 const initialMessages: ChatMessage[] = [
@@ -54,11 +56,55 @@ const formatDate = (dateTime?: string | null) => {
   return `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일`;
 };
 
+const getImageFileName = (imageUri: string) => {
+  const uriWithoutQuery = imageUri.split('?')[0];
+  return uriWithoutQuery.split('/').pop() || 'chat_image.jpg';
+};
+
+const getImageContentType = (fileName: string, fallback?: string) => {
+  if (fallback) {
+    return fallback;
+  }
+
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (extension === 'png') {
+    return 'image/png';
+  }
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+  if (extension === 'heic') {
+    return 'image/heic';
+  }
+  return 'image/jpeg';
+};
+
+const appendImageFile = async (formData: FormData, imageUri: string) => {
+  const fileName = getImageFileName(imageUri);
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const contentType = getImageContentType(fileName, blob.type);
+    const file = new File([blob], fileName, { type: contentType });
+
+    formData.append('file', file);
+    return;
+  }
+
+  formData.append('file', {
+    uri: imageUri,
+    name: fileName,
+    type: getImageContentType(fileName),
+  } as any);
+};
+
 export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
   const [inputValue, setInputValue] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [currentChatId, setCurrentChatId] = useState<number | null>(null);
   const [currentChatTitle, setCurrentChatTitle] = useState<string>('새 대화');
   const [chatHistories, setChatHistories] = useState<AiChatSummaryResponseDto[]>([]);
@@ -95,6 +141,7 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
     setCurrentChatTitle('새 대화');
     setMessages(initialMessages);
     setInputValue('');
+    setSelectedImageUri(null);
     setShowHistory(false);
   };
 
@@ -149,18 +196,35 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isLoading) {
+    if ((!inputValue.trim() && !selectedImageUri) || isLoading) {
       return;
     }
 
-    const userMessage = inputValue.trim();
+    const userMessage = inputValue.trim() || '이 사진을 보고 알려줘.';
+    const attachedImageUri = selectedImageUri;
 
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: userMessage, imageUri: attachedImageUri ?? undefined },
+    ]);
     setInputValue('');
+    setSelectedImageUri(null);
     setIsLoading(true);
 
     try {
-      const response = await aiApi.sendChatQuery(userMessage, currentChatId ?? undefined);
+      let response;
+
+      if (attachedImageUri) {
+        const formData = new FormData();
+        formData.append('query', userMessage);
+        if (currentChatId) {
+          formData.append('chatId', String(currentChatId));
+        }
+        await appendImageFile(formData, attachedImageUri);
+        response = await aiApi.sendChatQueryWithImage(formData);
+      } else {
+        response = await aiApi.sendChatQuery(userMessage, currentChatId ?? undefined);
+      }
 
       if (response && response.answer) {
         setCurrentChatId(response.chatId);
@@ -180,8 +244,25 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
     }
   };
 
-  const handleAttachPress = () => {
-    Alert.alert('이미지 질문 안내', '이미지 기반 병해 진단은 병해충 진단 화면에서 사용할 수 있어요.');
+  const handleAttachPress = async () => {
+    if (isLoading) {
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        setSelectedImageUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('이미지 선택 에러:', error);
+      Alert.alert('이미지 선택 실패', '이미지를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.');
+    }
   };
 
   return (
@@ -290,6 +371,9 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
                 <Text style={[styles.messageText, message.role === 'user' && styles.messageTextUser]}>
                   {message.content}
                 </Text>
+                {message.imageUri && (
+                  <Image source={{ uri: message.imageUri }} style={styles.messageImage} />
+                )}
               </View>
             </View>
           ))}
@@ -308,6 +392,18 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
         </ScrollView>
 
         <View style={styles.inputSection}>
+          {selectedImageUri && (
+            <View style={styles.selectedImagePreview}>
+              <Image source={{ uri: selectedImageUri }} style={styles.selectedImage} />
+              <TouchableOpacity
+                style={styles.removeImageButton}
+                onPress={() => setSelectedImageUri(null)}
+              >
+                <X size={16} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.suggestionsContainer}>
             <Text style={styles.suggestionsLabel}>추천 질문</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionsScroll}>
@@ -344,8 +440,8 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
 
             <TouchableOpacity
               onPress={handleSend}
-              style={[styles.sendButton, (isLoading || !inputValue.trim()) && styles.sendButtonDisabled]}
-              disabled={isLoading || !inputValue.trim()}
+              style={[styles.sendButton, (isLoading || (!inputValue.trim() && !selectedImageUri)) && styles.sendButtonDisabled]}
+              disabled={isLoading || (!inputValue.trim() && !selectedImageUri)}
             >
               <Send size={20} color="#FFF" />
             </TouchableOpacity>
@@ -420,12 +516,42 @@ const styles = StyleSheet.create({
   },
   messageText: { fontSize: 14, lineHeight: 20, color: '#333' },
   messageTextUser: { color: '#FFFFFF' },
+  messageImage: {
+    width: 160,
+    height: 120,
+    borderRadius: 12,
+    marginTop: 10,
+    backgroundColor: '#E8F5E9',
+  },
   loadingBubble: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   loadingText: { fontSize: 13, color: '#666' },
   inputSection: {
     padding: 24,
     paddingBottom: Platform.OS === 'ios' ? 12 : 24,
     backgroundColor: '#F1F8E9',
+  },
+  selectedImagePreview: {
+    width: 96,
+    height: 96,
+    borderRadius: 16,
+    marginBottom: 12,
+    backgroundColor: '#E8F5E9',
+  },
+  selectedImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 16,
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   suggestionsContainer: { marginBottom: 12 },
   suggestionsLabel: { fontSize: 12, color: '#666', marginBottom: 8, fontWeight: '500' },

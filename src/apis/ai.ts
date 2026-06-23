@@ -54,6 +54,11 @@ export const aiApi = {
     return response.data;
   },
 
+  sendChatQueryWithImage: async (formData: FormData): Promise<AiChatResponseDto> => {
+    const response = await apiClient.post<AiChatResponseDto>('/api/v1/ai/chat/image', formData);
+    return response.data;
+  },
+
   getChatHistories: async (): Promise<AiChatSummaryResponseDto[]> => {
     const response = await apiClient.get<AiChatSummaryResponseDto[]>('/api/v1/ai/chats');
     return response.data;
