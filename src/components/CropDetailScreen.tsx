@@ -193,7 +193,7 @@ export function CropDetailScreen({ route, navigation }: CropDetailScreenProps) {
         
         <TouchableOpacity 
           style={[styles.button, styles.primaryButton]}
-          onPress={() => navigation.navigate('FarmDiary')}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'FarmDiary' })}
         >
           <Text style={styles.primaryButtonText}>내 농부일지에 추가하기</Text>
         </TouchableOpacity>

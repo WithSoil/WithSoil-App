@@ -26,9 +26,11 @@ import {
   Bell,
   Settings,
   Trash2,
+  Clock,
 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { useFocusEffect } from '@react-navigation/native';
 
 import profileImage from '../assets/image.png';
 import { diaryApi } from '../apis/diary';
@@ -45,9 +47,16 @@ const toMonthKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() 
 
 const toDateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 
-const toDiaryDateTime = (date: Date) => {
+const toDiaryDateTime = (date: Date, hour: number, minute: number) => {
+  return `${toDateKey(date)}T${pad(hour)}:${pad(minute)}:00`;
+};
+
+const getCurrentTimeParts = () => {
   const now = new Date();
-  return `${toDateKey(date)}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  return {
+    hour: now.getHours(),
+    minute: now.getMinutes(),
+  };
 };
 
 const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -60,12 +69,12 @@ const isSameDate = (left: Date, right: Date) => (
   && left.getDate() === right.getDate()
 );
 
-const formatKoreanDateTime = (value: string) => {
+const formatTime = (value: string) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return `${date.getMonth() + 1}월 ${date.getDate()}일 ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
 const createPreview = (diary: any) => {
@@ -84,19 +93,26 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
   const dateScrollRef = useRef<ScrollView>(null);
   const yearPickerRef = useRef<ScrollView>(null);
   const monthPickerRef = useRef<ScrollView>(null);
+  const hourPickerRef = useRef<ScrollView>(null);
+  const minutePickerRef = useRef<ScrollView>(null);
+  const initialTime = useMemo(() => getCurrentTimeParts(), []);
 
   const [currentMonth, setCurrentMonth] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [selectedDate, setSelectedDate] = useState(new Date(today.getFullYear(), today.getMonth(), today.getDate()));
   const [showCalendar, setShowCalendar] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [pickerYear, setPickerYear] = useState(today.getFullYear());
   const [pickerMonth, setPickerMonth] = useState(today.getMonth());
+  const [selectedHour, setSelectedHour] = useState(initialTime.hour);
+  const [selectedMinute, setSelectedMinute] = useState(initialTime.minute);
+  const [pickerHour, setPickerHour] = useState(initialTime.hour);
+  const [pickerMinute, setPickerMinute] = useState(initialTime.minute);
   const [selectedWorks, setSelectedWorks] = useState<string[]>([]);
   const [customWork, setCustomWork] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
   const [existingPhotos, setExistingPhotos] = useState<any[]>([]);
-  const [monthlyDiaries, setMonthlyDiaries] = useState<any[]>([]);
   const [selectedDateDiaries, setSelectedDateDiaries] = useState<any[]>([]);
   const [loggedDays, setLoggedDays] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
@@ -121,6 +137,8 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
     [today]
   );
   const monthOptions = useMemo(() => Array.from({ length: 12 }, (_, i) => i), []);
+  const hourOptions = useMemo(() => Array.from({ length: 24 }, (_, i) => i), []);
+  const minuteOptions = useMemo(() => Array.from({ length: 60 }, (_, i) => i), []);
 
   const imageSource = (uri: string) => ({
     uri: `${apiClient.defaults.baseURL}${uri}`,
@@ -128,17 +146,17 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
   });
 
   const loadMonthlyData = useCallback(async () => {
-    const [summaries, calendar] = await Promise.all([
-      diaryApi.getMonthlyDiaries(monthKey),
-      diaryApi.getMonthlyCalendar(monthKey),
-    ]);
-    setMonthlyDiaries(summaries || []);
+    const calendar = await diaryApi.getMonthlyCalendar(monthKey);
     setLoggedDays(new Set((calendar || []).map((item: any) => Number(item.date.split('-')[2]))));
   }, [monthKey]);
 
   const loadSelectedDateDiaries = useCallback(async () => {
     const diaries = await diaryApi.getDiariesByDate(selectedDateKey);
-    setSelectedDateDiaries(diaries || []);
+    setSelectedDateDiaries(
+      (diaries || []).slice().sort((left: any, right: any) => (
+        new Date(left.diaryDateTime).getTime() - new Date(right.diaryDateTime).getTime()
+      ))
+    );
   }, [selectedDateKey]);
 
   const refresh = useCallback(async () => {
@@ -161,6 +179,12 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
     refresh();
   }, [refresh]);
 
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
+
   useEffect(() => {
     const scrollX = Math.max(0, (selectedDate.getDate() - 1) * dateItemStep);
     requestAnimationFrame(() => {
@@ -173,6 +197,8 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
       const dateObj = new Date(existingData.diaryDateTime);
       setCurrentMonth(new Date(dateObj.getFullYear(), dateObj.getMonth(), 1));
       setSelectedDate(new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
+      setSelectedHour(dateObj.getHours());
+      setSelectedMinute(dateObj.getMinutes());
       setSelectedWorks(existingData.works || []);
       setNotes(existingData.memo || '');
       setExistingPhotos(existingData.photos || []);
@@ -190,6 +216,17 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
       monthPickerRef.current?.scrollTo({ y: pickerMonth * 44, animated: false });
     });
   }, [showMonthPicker, pickerYear, pickerMonth, yearOptions]);
+
+  useEffect(() => {
+    if (!showTimePicker) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      hourPickerRef.current?.scrollTo({ y: pickerHour * 44, animated: false });
+      minutePickerRef.current?.scrollTo({ y: pickerMinute * 44, animated: false });
+    });
+  }, [showTimePicker, pickerHour, pickerMinute]);
 
   const changeMonth = (offset: number) => {
     const nextMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + offset, 1);
@@ -214,6 +251,18 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
     setCurrentMonth(nextMonth);
     setSelectedDate(new Date(pickerYear, pickerMonth, nextSelectedDay));
     setShowMonthPicker(false);
+  };
+
+  const openTimePicker = () => {
+    setPickerHour(selectedHour);
+    setPickerMinute(selectedMinute);
+    setShowTimePicker(true);
+  };
+
+  const applyTimePicker = () => {
+    setSelectedHour(pickerHour);
+    setSelectedMinute(pickerMinute);
+    setShowTimePicker(false);
   };
 
   const toggleWork = (label: string) => {
@@ -263,11 +312,23 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
   };
 
   const resetForm = () => {
+    const currentTime = getCurrentTimeParts();
     setSelectedWorks([]);
     setCustomWork('');
     setNotes('');
     setSelectedPhotos([]);
     setExistingPhotos([]);
+    setSelectedHour(currentTime.hour);
+    setSelectedMinute(currentTime.minute);
+  };
+
+  const clearEditMode = () => {
+    resetForm();
+    navigation.setParams({
+      editMode: undefined,
+      diaryId: undefined,
+      existingData: undefined,
+    });
   };
 
   const handleSaveDiary = async () => {
@@ -284,23 +345,22 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
     setSaving(true);
     try {
       const payload = {
-        diaryDateTime: toDiaryDateTime(selectedDate),
+        diaryDateTime: toDiaryDateTime(selectedDate, selectedHour, selectedMinute),
         works,
         memo: notes.trim(),
         photoUris: selectedPhotos,
       };
 
       if (editMode) {
+        if (!editDiaryId) {
+          Alert.alert('수정 실패', '수정할 일지 정보를 찾지 못했습니다. 다시 시도해주세요.');
+          return;
+        }
+
         await diaryApi.updateDiary(editDiaryId, payload);
-        Alert.alert('수정 완료', '농부일지가 수정되었습니다.', [
-          {
-            text: '확인',
-            onPress: () => {
-              navigation.navigate('FarmDiary', { editMode: false, existingData: null });
-              refresh();
-            },
-          },
-        ]);
+        await refresh();
+        clearEditMode();
+        Alert.alert('수정 완료', '농부일지가 수정되었습니다.');
       } else {
         await diaryApi.createDiary(payload);
         resetForm();
@@ -323,7 +383,7 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
 
     return (
       <View style={styles.selectedDiarySection}>
-        <Text style={styles.sectionTitle}>{selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 기록</Text>
+        <Text style={styles.sectionTitle}>{selectedDate.getMonth() + 1}월 {selectedDate.getDate()}일 일지</Text>
         {loading && selectedDateDiaries.length === 0 ? (
           <ActivityIndicator color="#4CAF50" />
         ) : selectedDateDiaries.length === 0 ? (
@@ -338,7 +398,7 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
               onPress={() => navigation.navigate('DiaryDetailScreen', { diaryId: diary.id })}
             >
               <View style={styles.diaryCardHeader}>
-                <Text style={styles.diaryDate}>{formatKoreanDateTime(diary.diaryDateTime)}</Text>
+                <Text style={styles.diaryDate}>{formatTime(diary.diaryDateTime)}</Text>
                 <Text style={styles.diaryCount}>{diary.photos?.length || 0}장</Text>
               </View>
               {diary.works?.length > 0 && (
@@ -543,6 +603,49 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
         </View>
       </Modal>
 
+      <Modal visible={showTimePicker} transparent={true} animationType="slide">
+        <TouchableWithoutFeedback onPress={() => setShowTimePicker(false)}>
+          <View style={styles.monthPickerOverlay} />
+        </TouchableWithoutFeedback>
+        <View style={styles.monthPickerSheet}>
+          <View style={styles.monthPickerHeader}>
+            <TouchableOpacity onPress={() => setShowTimePicker(false)}>
+              <Text style={styles.monthPickerCancel}>취소</Text>
+            </TouchableOpacity>
+            <Text style={styles.monthPickerTitle}>기록 시간 선택</Text>
+            <TouchableOpacity onPress={applyTimePicker}>
+              <Text style={styles.monthPickerDone}>완료</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.monthPickerColumns}>
+            <ScrollView ref={hourPickerRef} showsVerticalScrollIndicator={false} style={styles.monthPickerColumn}>
+              {hourOptions.map((hour) => {
+                const isSelected = pickerHour === hour;
+                return (
+                  <TouchableOpacity key={hour} style={styles.monthPickerOption} onPress={() => setPickerHour(hour)}>
+                    <Text style={[styles.monthPickerOptionText, isSelected && styles.monthPickerOptionTextSelected]}>
+                      {pad(hour)}시
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <ScrollView ref={minutePickerRef} showsVerticalScrollIndicator={false} style={styles.monthPickerColumn}>
+              {minuteOptions.map((minute) => {
+                const isSelected = pickerMinute === minute;
+                return (
+                  <TouchableOpacity key={minute} style={styles.monthPickerOption} onPress={() => setPickerMinute(minute)}>
+                    <Text style={[styles.monthPickerOptionText, isSelected && styles.monthPickerOptionTextSelected]}>
+                      {pad(minute)}분
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       <ScrollView
         style={styles.mainContent}
         contentContainerStyle={styles.mainContentPadding}
@@ -550,107 +653,84 @@ export function FarmDiaryScreen({ navigation, route }: FarmDiaryScreenProps) {
       >
         {renderSelectedDateDiaries()}
 
-        <View style={styles.customTaskRow}>
-          <TextInput
-            style={styles.customTaskInput}
-            placeholder="직접 입력"
-            placeholderTextColor="#999"
-            value={customWork}
-            onChangeText={setCustomWork}
-            returnKeyType="done"
-            onSubmitEditing={addCustomWork}
-          />
-          <TouchableOpacity style={styles.addCustomTaskButton} onPress={addCustomWork}>
-            <Plus size={20} color="#FFF" />
+        <View style={styles.entrySection}>
+          <Text style={styles.sectionTitle}>오늘의 작업</Text>
+
+          <View style={styles.timeField}>
+            <Text style={styles.timeFieldLabel}>작업 시간</Text>
+            <TouchableOpacity style={styles.timeButton} onPress={openTimePicker}>
+              <Clock size={18} color="#4CAF50" />
+              <Text style={styles.timeButtonText}>{pad(selectedHour)}:{pad(selectedMinute)}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.customTaskRow}>
+            <TextInput
+              style={styles.customTaskInput}
+              placeholder="직접 입력"
+              placeholderTextColor="#999"
+              value={customWork}
+              onChangeText={setCustomWork}
+              returnKeyType="done"
+              onSubmitEditing={addCustomWork}
+            />
+            <TouchableOpacity style={styles.addCustomTaskButton} onPress={addCustomWork}>
+              <Plus size={20} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+
+          {selectedWorks.length > 0 && (
+            <View style={styles.selectedWorksWrap}>
+              {selectedWorks.map((work) => (
+                <TouchableOpacity key={work} style={styles.workChip} onPress={() => toggleWork(work)}>
+                  <Text style={styles.workChipText}>{work}</Text>
+                  <X size={12} color="#2E7D32" />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.sectionTitle}>작물 사진</Text>
+          <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
+            <View style={styles.photoIconCircle}>
+              <Camera size={28} color="#4CAF50" />
+            </View>
+            <Text style={styles.photoText}>오늘의 사진 추가</Text>
           </TouchableOpacity>
+
+          {(selectedPhotos.length > 0 || existingPhotos.length > 0) && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoPreviewList}>
+              {existingPhotos.map((photo) => (
+                <View key={`existing-${photo.id}`} style={styles.photoPreviewItem}>
+                  <Image source={imageSource(photo.imageUrl)} style={styles.photoPreviewImage} />
+                  <TouchableOpacity style={styles.removePhotoButton} onPress={() => removeExistingPhoto(photo.id)}>
+                    <Trash2 size={14} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {selectedPhotos.map((uri) => (
+                <View key={uri} style={styles.photoPreviewItem}>
+                  <Image source={{ uri }} style={styles.photoPreviewImage} />
+                  <TouchableOpacity style={styles.removePhotoButton} onPress={() => removePhoto(uri)}>
+                    <Trash2 size={14} color="#FFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
+          <Text style={styles.sectionTitle}>메모</Text>
+          <TextInput
+            style={styles.notesInput}
+            multiline
+            textAlignVertical="top"
+            placeholder="오늘의 농사 활동을 기록해보세요..."
+            placeholderTextColor="#999"
+            value={notes}
+            onChangeText={setNotes}
+          />
         </View>
 
-        {selectedWorks.length > 0 && (
-          <View style={styles.selectedWorksWrap}>
-            {selectedWorks.map((work) => (
-              <TouchableOpacity key={work} style={styles.workChip} onPress={() => toggleWork(work)}>
-                <Text style={styles.workChipText}>{work}</Text>
-                <X size={12} color="#2E7D32" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.sectionTitle}>작물 사진</Text>
-        <TouchableOpacity style={styles.photoButton} onPress={pickImage}>
-          <View style={styles.photoIconCircle}>
-            <Camera size={28} color="#4CAF50" />
-          </View>
-          <Text style={styles.photoText}>오늘의 사진 추가</Text>
-        </TouchableOpacity>
-
-        {(selectedPhotos.length > 0 || existingPhotos.length > 0) && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoPreviewList}>
-            {existingPhotos.map((photo) => (
-              <View key={`existing-${photo.id}`} style={styles.photoPreviewItem}>
-                <Image source={imageSource(photo.imageUrl)} style={styles.photoPreviewImage} />
-                <TouchableOpacity style={styles.removePhotoButton} onPress={() => removeExistingPhoto(photo.id)}>
-                  <Trash2 size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
-            {selectedPhotos.map((uri) => (
-              <View key={uri} style={styles.photoPreviewItem}>
-                <Image source={{ uri }} style={styles.photoPreviewImage} />
-                <TouchableOpacity style={styles.removePhotoButton} onPress={() => removePhoto(uri)}>
-                  <Trash2 size={14} color="#FFF" />
-                </TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-        )}
-
-        <Text style={styles.sectionTitle}>메모</Text>
-        <TextInput
-          style={styles.notesInput}
-          multiline
-          textAlignVertical="top"
-          placeholder="오늘의 농사 활동을 기록해보세요..."
-          placeholderTextColor="#999"
-          value={notes}
-          onChangeText={setNotes}
-        />
-
-        {!editMode && (
-          <>
-            <View style={styles.diarySection}>
-              <Text style={styles.sectionTitle}>이번 달 전체 일지</Text>
-              {monthlyDiaries.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <Text style={styles.emptyText}>이번 달에 기록된 일지가 없습니다.</Text>
-                </View>
-              ) : (
-                monthlyDiaries.map((log) => (
-                  <TouchableOpacity
-                    key={log.id}
-                    style={styles.pastLogCard}
-                    onPress={() => {
-                      const date = new Date(log.diaryDateTime);
-                      setSelectedDate(new Date(date.getFullYear(), date.getMonth(), date.getDate()));
-                    }}
-                  >
-                    {log.thumbnailUrl ? (
-                      <Image source={imageSource(log.thumbnailUrl)} style={styles.pastLogThumbnail} />
-                    ) : (
-                      <View style={styles.pastLogEmoji}>
-                        <Camera size={24} color="#4CAF50" />
-                      </View>
-                    )}
-                    <View style={styles.pastLogContent}>
-                      <Text style={styles.pastLogDate}>{formatKoreanDateTime(log.diaryDateTime)}</Text>
-                      <Text style={styles.pastLogPreview} numberOfLines={2}>{log.preview}</Text>
-                    </View>
-                  </TouchableOpacity>
-                ))
-              )}
-            </View>
-          </>
-        )}
       </ScrollView>
 
       <View style={styles.saveButtonFooter}>
@@ -727,6 +807,11 @@ const styles = StyleSheet.create({
   mainContent: { flex: 1, backgroundColor: '#FAFAFA' },
   mainContentPadding: { padding: 24, paddingBottom: 32 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#000', marginBottom: 12 },
+  entrySection: { borderTopWidth: 1, borderTopColor: '#EAEAEE', paddingTop: 20, marginTop: 8 },
+  timeField: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  timeFieldLabel: { fontSize: 14, color: '#666', fontWeight: '600' },
+  timeButton: { height: 40, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F1F8E9', borderRadius: 14, borderWidth: 1, borderColor: '#C8E6C9', paddingHorizontal: 14 },
+  timeButtonText: { fontSize: 15, color: '#2E7D32', fontWeight: '700' },
   customTaskRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   customTaskInput: { flex: 1, height: 48, backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1, borderColor: '#EAEAEE', paddingHorizontal: 14, fontSize: 14, color: '#111' },
   addCustomTaskButton: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#4CAF50', alignItems: 'center', justifyContent: 'center' },
@@ -746,7 +831,6 @@ const styles = StyleSheet.create({
   saveButtonDisabled: { opacity: 0.65 },
   saveButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   selectedDiarySection: { marginBottom: 12 },
-  diarySection: { marginTop: 12 },
   emptyCard: { minHeight: 72, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EAEAEE', borderRadius: 18, alignItems: 'center', justifyContent: 'center', padding: 16 },
   emptyText: { color: '#777', fontSize: 14 },
   diaryCard: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EAEAEE', borderRadius: 20, padding: 16, marginBottom: 12 },
@@ -759,10 +843,4 @@ const styles = StyleSheet.create({
   diaryPreview: { fontSize: 14, color: '#555', lineHeight: 20 },
   savedPhotoList: { gap: 8, paddingTop: 12 },
   savedPhotoImage: { width: 72, height: 72, borderRadius: 14, backgroundColor: '#E8F5E9' },
-  pastLogCard: { flexDirection: 'row', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EAEAEE', borderRadius: 20, padding: 16, marginBottom: 12, gap: 16 },
-  pastLogEmoji: { width: 56, height: 56, borderRadius: 12, backgroundColor: '#F1F8E9', alignItems: 'center', justifyContent: 'center' },
-  pastLogThumbnail: { width: 56, height: 56, borderRadius: 12, backgroundColor: '#F1F8E9' },
-  pastLogContent: { flex: 1, justifyContent: 'center' },
-  pastLogDate: { fontSize: 14, fontWeight: '600', color: '#4CAF50', marginBottom: 4 },
-  pastLogPreview: { fontSize: 14, color: '#666', lineHeight: 20 },
 });
