@@ -42,6 +42,32 @@ export interface AiDiagnosisResponseDto {
   confidence: number;
 }
 
+export interface AiRecommendRequestDto {
+  region: string;
+  purpose: string;
+}
+
+export interface CropRecommendDetailDto {
+  cropName: string;
+  recommendScore: number;
+  aiReasonTitle: string;
+  aiReasonDetail: string;
+  difficultyLevel: string;
+  optimalTemp: string;
+  soilPh: string;
+  cultivationPeriod: string;
+  mainTasks: string[];
+  mainRisks: string[];
+}
+
+export interface AiRecommendResponseDto {
+  region: string;
+  purpose: string;
+  recommendedCrops: CropRecommendDetailDto[];
+}
+
+
+
 export const aiApi = {
 
   sendChatQuery: async (query: string, chatId?: number): Promise<AiChatResponseDto> => {
@@ -75,6 +101,11 @@ export const aiApi = {
 
   diagnoseCrop: async (formData: FormData): Promise<AiDiagnosisResponseDto> => {
     const response = await apiClient.post<AiDiagnosisResponseDto>('/api/v1/ai/diagnose', formData);
+    return response.data;
+  },
+
+  recommendCrop: async (data: AiRecommendRequestDto): Promise<AiRecommendResponseDto> => {
+    const response = await apiClient.post<AiRecommendResponseDto>('/api/v1/ai/recommend', data);
     return response.data;
   },
 };

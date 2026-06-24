@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -23,6 +24,8 @@ import {
 import profileImage from '../assets/image.png'; 
 import { WebView } from 'react-native-webview';
 import { memberApi } from '../apis/member'; // 임의 지정한 API 구조, 팀 구조에 맞게 변경
+import { RecommendCard } from './RecommendCard';
+
 
 interface MainScreenProps {
   navigation: any;
@@ -33,35 +36,36 @@ const KAKAO_MAP_API_KEY = '585a0d74c620c91802e27770e06d7b8a';
 export function MainScreen({ navigation }: MainScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
   
-  // 🌟 1. 실시간 백엔드 데이터를 담을 상태값 정의
   const [memberLocation, setMemberLocation] = useState<any>(null);
   const [recommendedCrops, setRecommendedCrops] = useState<any[]>([]);
 
-  // 기본 지도 좌표 (주소가 없을 때 띄워줄 디폴트 충북 청주 좌표)
   const [mapCoords, setMapCoords] = useState({
     latitude: 36.6358,
     longitude: 127.4914
   });
 
-  // 🌟 2. 화면 진입 시 마이페이지 데이터 땡겨오기 (유저 주소 및 추천 내역)
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
+      console.log("=== [DEBUG] useFocusEffect가 작동했습니다! ===");
     const fetchMainData = async () => {
       try {
         setIsLoading(true);
-        // Spring Boot의 마이페이지 API 호출 (주소와 내역이 같이 온다고 가정)
         const response = await memberApi.getMypage(); 
+        console.log(">>> 백엔드에서 온 전체 응답 데이터:", JSON.stringify(response, null, 2));
         
         if (response?.data) {
+          const data = response.data;
+          console.log(">>> response.data 안에 들어있는 키값들:", Object.keys(data));
           const { location, recommendations } = response.data;
           
           setMemberLocation(location);
           
-          // 추천 이력이 존재하면 리스트 세팅
           if (recommendations && recommendations.length > 0) {
-            setRecommendedCrops(recommendations);
+              setRecommendedCrops(recommendations);
+            } else {
+              setRecommendedCrops([]);
           }
           
-          // 가입된 위경도가 존재하면 지도 중심 변경
           if (location?.latitude && location?.longitude) {
             setMapCoords({
               latitude: Number(location.latitude),
@@ -77,9 +81,9 @@ export function MainScreen({ navigation }: MainScreenProps) {
     };
 
     fetchMainData();
-  }, []);
+  }, [])
+  );
 
-  // 동적 카카오맵 HTML 스트링
   const mapHtml = `
     <!DOCTYPE html>
     <html>
@@ -170,40 +174,24 @@ export function MainScreen({ navigation }: MainScreenProps) {
             </View>
           </View>
 
-          {/* 🌟 3. 추천 데이터 유무에 따른 조건부 렌더링 영역 */}
           <View style={styles.cropsContainer}>
             <Text style={styles.sectionTitle}>추천 작물</Text>
             
             {recommendedCrops.length > 0 ? (
-              // ⭕ 추천 데이터가 있을 때: 가로 스크롤 리스트 렌더링
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cropsScroll}>
-                {recommendedCrops.map((crop) => (
-                  <TouchableOpacity
-                    key={crop.id}
-                    style={styles.cropCard}
-                    onPress={() => navigation.navigate('CropDetail', { id: crop.id })}
-                    activeOpacity={0.8}
-                  >
-                    <View style={styles.cropImageContainer}>
-                      <Text style={styles.cropEmoji}>🌱</Text>
-                      <View style={styles.matchBadge}>
-                        <Star size={10} color="#FFF" fill="#FFF" />
-                        <Text style={styles.matchBadgeText}>{crop.match_score || crop.match}%</Text>
-                      </View>
-                    </View>
-                    <View style={styles.cropInfo}>
-                      <Text style={styles.cropName}>{crop.crop_name || crop.name}</Text>
-                      <Text style={styles.cropSeason}>{crop.harvest_month || crop.season}</Text>
-                    </View>
-                  </TouchableOpacity>
+                {recommendedCrops.map((crop, index) => (
+                  <RecommendCard
+                    key={index} 
+                    crop={crop}
+                    onPress={() => navigation.navigate('CropDetail', { cropData: crop })}
+                  />
                 ))}
               </ScrollView>
             ) : (
-              // ❌ 추천 데이터가 없을 때: 추천 받으러 가기 유도 Empty View
               <TouchableOpacity 
                 style={styles.emptyRecommendBox}
                 activeOpacity={0.8}
-                onPress={() => navigation.navigate('Chatbot')} // 대화형 추천 탭으로 이동시킴
+                onPress={() => navigation.navigate('Recommend')} 
               >
                 <View style={styles.emptyTextContainer}>
                   <Text style={styles.emptyTitle}>나에게 맞는 작물은 무엇일까요?</Text>
@@ -218,7 +206,7 @@ export function MainScreen({ navigation }: MainScreenProps) {
         </View>
 
         {/* Floating Action Button */}
-        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('Chatbot')} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('Recommend')} activeOpacity={0.8}>
           <MessageSquare size={28} color="#FFFFFF" fill="#FFFFFF" />
         </TouchableOpacity>
       </View>
@@ -227,7 +215,6 @@ export function MainScreen({ navigation }: MainScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  // ... 기존 스타일 유지 하되 아래에 있는 Empty View 스타일 추가 ...
   safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   container: { flex: 1, backgroundColor: '#FAFAFA' },
   webview: { flex: 1 },

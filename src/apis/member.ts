@@ -1,3 +1,4 @@
+import { CropRecommendDetailDto } from './ai';
 import { apiClient, ApiResponse } from './apiClient';
 
 export interface MemberLocation {
@@ -34,6 +35,8 @@ export interface MemberMypageResponse {
   id: number;
   email: string;
   name: string;
+  location?: MemberLocation; 
+  recommendations?: CropRecommendDetailDto[];
 }
 
 export const memberApi = {
