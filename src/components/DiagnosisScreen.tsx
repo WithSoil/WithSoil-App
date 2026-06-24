@@ -252,7 +252,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
             <MessageSquare size={20} color="#4CAF50" />
             <Text style={styles.outlineButtonText}>챗봇에게 질문하기</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={() => navigation.navigate('Logbook')}>
+          <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={() => navigation.navigate('FarmDiary')}>
             <Text style={styles.primaryButtonText}>일지에 진단 기록 저장</Text>
           </TouchableOpacity>
         </View>

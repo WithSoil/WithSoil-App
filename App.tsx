@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -12,10 +12,21 @@ import { LocationSetup } from './src/components/LocationSetup';
 import { MainScreen } from './src/components/MainScreen';
 import { CropDetailScreen } from './src/components/CropDetailScreen';
 import { DiagnosisScreen } from './src/components/DiagnosisScreen';
-import { LogbookScreen } from './src/components/LogbookScreen';
+import { FarmDiaryScreen } from './src/components/FarmDiaryScreen';
 import { ChatbotScreen } from './src/components/ChatbotScreen';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { DiaryDetailScreen } from './src/components/DiaryDetailScreen';
+
+export type TabParamList = {
+  Home: undefined;
+  Diagnosis: undefined;
+  FarmDiary: {
+    editMode?: boolean;
+    diaryId?: number;
+    existingData?: any | null;
+  } | undefined;
+  Profile: undefined;
+};
 
 // 네비게이션 파라미터 타입 정의
 export type RootStackParamList = {
@@ -26,17 +37,10 @@ export type RootStackParamList = {
   } | undefined;
   SignupScreen: undefined;
 
-  MainTabs: undefined;
+  MainTabs: NavigatorScreenParams<TabParamList> | undefined;
   CropDetail: { id: string }; 
   Chatbot: undefined;
   DiaryDetailScreen: { diaryId: number };
-};
-
-export type TabParamList = {
-  Home: undefined;
-  Diagnosis: undefined;
-  Logbook: undefined;
-  Profile: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -69,8 +73,8 @@ function MainTabNavigator() {
         }}
       />
       <Tab.Screen 
-        name="Logbook" 
-        component={LogbookScreen} 
+        name="FarmDiary" 
+        component={FarmDiaryScreen} 
         options={{
           tabBarLabel: '일지',
           tabBarIcon: ({ color, size }) => <BookOpen color={color} size={size} />

@@ -50,6 +50,11 @@ export const diaryApi = {
     return response.data.data;
   },
 
+  getDiariesByDate: async (date: string) => {
+    const response = await apiClient.get(`/api/v1/farm-diaries/date/${date}`);
+    return response.data.data;
+  },
+
   getDiaryDetail: async (diaryId: number) => {
     const response = await apiClient.get(`/api/v1/farm-diaries/${diaryId}`);
     return response.data.data;
