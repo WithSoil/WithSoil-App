@@ -66,7 +66,7 @@ export function RecommendScreen({ navigation }: any) {
         cropList = [response]; 
       }
 
-      navigation.navigate('Main', { crops: cropList });
+      navigation.navigate('MainTabs', { crops: cropList });
 
     } catch (error) {
       Alert.alert("오류", "데이터를 가져오는데 실패했습니다.");

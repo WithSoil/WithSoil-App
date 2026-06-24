@@ -1,4 +1,4 @@
-import { CropRecommendDetailDto } from './ai';
+import { AiRecommendResponseDto, CropRecommendDetailDto } from './ai';
 import { apiClient, ApiResponse } from './apiClient';
 
 export interface MemberLocation {

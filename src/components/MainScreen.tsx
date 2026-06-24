@@ -9,6 +9,7 @@ import {
   SafeAreaView,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {
   MapPin,
@@ -23,7 +24,7 @@ import {
 } from 'lucide-react-native';
 import profileImage from '../assets/image.png'; 
 import { WebView } from 'react-native-webview';
-import { memberApi } from '../apis/member'; // 임의 지정한 API 구조, 팀 구조에 맞게 변경
+import { memberApi } from '../apis/member';
 import { RecommendCard } from './RecommendCard';
 
 
@@ -34,6 +35,7 @@ interface MainScreenProps {
 const KAKAO_MAP_API_KEY = '585a0d74c620c91802e27770e06d7b8a';
 
 export function MainScreen({ navigation }: MainScreenProps) {
+  console.log(">>> [체크] MainScreen 렌더링 됨!");
   const [isLoading, setIsLoading] = useState(true);
   
   const [memberLocation, setMemberLocation] = useState<any>(null);
@@ -44,28 +46,44 @@ export function MainScreen({ navigation }: MainScreenProps) {
     longitude: 127.4914
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      console.log("=== [DEBUG] useFocusEffect가 작동했습니다! ===");
+useEffect(() => {
     const fetchMainData = async () => {
       try {
         setIsLoading(true);
         const response = await memberApi.getMypage(); 
-        console.log(">>> 백엔드에서 온 전체 응답 데이터:", JSON.stringify(response, null, 2));
         
         if (response?.data) {
-          const data = response.data;
-          console.log(">>> response.data 안에 들어있는 키값들:", Object.keys(data));
           const { location, recommendations } = response.data;
           
+          // 1. 위치 정보 세팅
           setMemberLocation(location);
           
-          if (recommendations && recommendations.length > 0) {
-              setRecommendedCrops(recommendations);
-            } else {
-              setRecommendedCrops([]);
+          // 2. 추천 작물 파싱 로직
+          if (recommendations) {
+            let parsedCrops: any[] = [];
+            
+            // 배열로 바로 들어온 경우
+            if (Array.isArray(recommendations)) {
+              parsedCrops = recommendations;
+            } 
+            // 혹시 문자열로 들어온 경우 대비
+            else if (typeof recommendations === 'string') {
+              try {
+                const parsed = JSON.parse(recommendations);
+                if (Array.isArray(parsed)) {
+                  parsedCrops = parsed;
+                }
+              } catch (e) {
+                // 파싱 에러 무시
+              }
+            }
+            
+            setRecommendedCrops(parsedCrops);
+          } else {
+            setRecommendedCrops([]);
           }
           
+          // 3. 지도 좌표 세팅
           if (location?.latitude && location?.longitude) {
             setMapCoords({
               latitude: Number(location.latitude),
@@ -74,15 +92,14 @@ export function MainScreen({ navigation }: MainScreenProps) {
           }
         }
       } catch (error) {
-        console.error("메인 데이터 로딩 실패:", error);
+        Alert.alert("에러", "API 호출에 실패했습니다.");
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchMainData();
-  }, [])
-  );
+  }, []);
 
   const mapHtml = `
     <!DOCTYPE html>
