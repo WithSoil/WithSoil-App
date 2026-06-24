@@ -63,39 +63,30 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
   };
 
   const handleCompleteSignup = async () => {
-    // 1. 회원가입 프로세스로 들어온 경우
-    // if (signupParams && !locationData) {
-    //   Alert.alert('알림', '농장 위치를 먼저 검색해 주세요.');
-    //   return;
-    // }
+
+    if (!locationData) {
+      alert('농장 위치를 먼저 검색해 주세요.');
+      return;
+    }
 
     setErrorMessage('');
+    setIsLoading(true);
 
-    if (signupParams?.fromSignup) {
-      setIsLoading(true);
-      try {
-        const mockLocation = {
-          sido: '전북특별자치도', // 또는 '전라북도' (sido)
-          sigungu: '김제시',      // (sigungu)
-          eupMyeonDong: '백산면',  // (eupMyeonDong) - optional
-          ri: '상정리',            // (ri) - optional
-          latitude: 35.8032,       // (latitude)
-          longitude: 126.8801,     // (longitude)
-        };
+    try {
+      await memberApi.updateLocation(locationData);
 
-        await memberApi.updateLocation(locationData || mockLocation);
-
+      if (signupParams?.fromSignup) {
         navigation.replace('MainTabs');
-      } catch (error: unknown) {
-        console.warn('위치 저장 실패:', getErrorStatus(error));
-        setErrorMessage('위치 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-      } finally {
-        setIsLoading(false);
+      } else {
+        alert('농장 위치가 성공적으로 수정되었습니다.');
+        navigation.goBack(); 
       }
-    } else {
-      // 2. 만약 회원가입을 거치지 않고 들어온 일반 흐름(시뮬레이션 등)일 때는 
-      // 기존 기획대로 메인 탭으로 바로 이동합니다.
-      navigation.navigate('MainTabs');
+
+    } catch (error: unknown) {
+      console.warn('위치 저장 실패:', getErrorStatus(error));
+      setErrorMessage('위치 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

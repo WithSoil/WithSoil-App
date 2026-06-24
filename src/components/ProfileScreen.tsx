@@ -75,7 +75,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
     : '위치 정보 없음';
 
   const menuItems = [
-    { icon: MapPin, label: '농장 위치', value: formattedAddress },
+    { icon: MapPin, label: '농장 위치', value: formattedAddress, onPress: () => navigation.navigate('LocationSetup') },
     { icon: Settings, label: '설정', value: null },
     { icon: Bell, label: '알림', value: null },
     { icon: HelpCircle, label: '도움말 & 지원', value: null },
@@ -142,6 +142,7 @@ export function ProfileScreen({ navigation }: ProfileScreenProps) {
                   idx !== menuItems.length - 1 && styles.menuItemBorder,
                 ]}
                 activeOpacity={0.7}
+                onPress={item.onPress}
               >
                 <View style={styles.menuIconCircle}>
                   <item.icon size={20} color="#333" />
