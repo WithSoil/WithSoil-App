@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Mail } from 'lucide-react-native';
 
-import profileImage from '../assets/image.png'; // 실제 프로젝트의 이미지 경로에 맞게 주석 해제
+import profileImage from '../assets/default_image.png'; // 실제 프로젝트의 이미지 경로에 맞게 주석 해제
 
 interface LoginScreenProps {
   navigation: any;

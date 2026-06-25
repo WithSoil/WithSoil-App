@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { ArrowLeft, Send, Image as ImageIcon, Clock, X, Plus, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import profileImage from '../assets/image.png';
+import profileImage from '../assets/default_image.png';
 import { AiChatSummaryResponseDto, aiApi } from '../apis/ai';
 
 interface ChatbotScreenProps {
