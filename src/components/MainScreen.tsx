@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,9 @@ import {
 
 import profileImage from '../assets/image.png'; // 실제 경로에 맞게 주석 해제
 import { WebView } from 'react-native-webview';
+import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation';
+import { getExpoPushToken } from '../utils/pushNotifications';
+import { memberApi } from '../apis/member';
 
 interface MainScreenProps {
   navigation: any;
@@ -34,12 +37,53 @@ const KAKAO_MAP_API_KEY = '585a0d74c620c91802e27770e06d7b8a';
 
 export function MainScreen({ navigation }: MainScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+    displayAddress: string;
+  } | null>(null);
 
-  // 임시 좌표 (추후 백엔드에서 회원 가입 시 등록한 location.latitude, longitude를 받아와 바인딩하면 됩니다)
-  const farmLatitude = 36.6358; // 예: 충북 지역 위도
-  const farmLongitude = 127.4914; // 예: 충북 지역 경도
+  const updateCurrentLocation = useCallback(async () => {
+    setIsLocating(true);
+    setLocationError('');
+    try {
+      const location = await getCurrentLocation();
+      setCurrentLocation({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        displayAddress: location.displayAddress,
+      });
+      setIsLoading(true);
+    } catch (error: unknown) {
+      setLocationError(getLocationErrorMessage(error));
+      setIsLoading(false);
+    } finally {
+      setIsLocating(false);
+    }
+  }, []);
 
-  const mapHtml = `
+  useEffect(() => {
+    updateCurrentLocation();
+  }, [updateCurrentLocation]);
+
+  useEffect(() => {
+    const registerPushToken = async () => {
+      try {
+        const pushToken = await getExpoPushToken();
+        if (pushToken) {
+          await memberApi.updatePushToken(pushToken);
+        }
+      } catch (error: unknown) {
+        console.warn('푸시 알림 등록 실패:', error);
+      }
+    };
+
+    registerPushToken();
+  }, []);
+
+  const mapHtml = currentLocation ? `
     <!DOCTYPE html>
     <html>
     <head>
@@ -68,13 +112,13 @@ export function MainScreen({ navigation }: MainScreenProps) {
       <script>
         var container = document.getElementById('map');
         var options = {
-          center: new kakao.maps.LatLng(${farmLatitude}, ${farmLongitude}),
+          center: new kakao.maps.LatLng(${currentLocation.latitude}, ${currentLocation.longitude}),
           level: 4 // 지도 확대 레벨
         };
 
         var map = new kakao.maps.Map(container, options);
 
-        var markerPosition  = new kakao.maps.LatLng(${farmLatitude}, ${farmLongitude}); 
+        var markerPosition  = new kakao.maps.LatLng(${currentLocation.latitude}, ${currentLocation.longitude});
         var marker = new kakao.maps.Marker({
             position: markerPosition
         });
@@ -82,7 +126,7 @@ export function MainScreen({ navigation }: MainScreenProps) {
       </script>
     </body>
     </html>
-  `;
+  ` : null;
   
   const crops = [
     { id: '1', name: '방울토마토', match: 95, season: '봄-여름' },
@@ -130,27 +174,35 @@ export function MainScreen({ navigation }: MainScreenProps) {
             </View>
           </View> */}
           <View style={styles.container}>
-          <WebView
-            originWhitelist={['*']}
-            source={{ 
-              html: mapHtml,
-              baseUrl: 'http://localhost:8081'
-             }}
-            style={styles.webview}
-            onLoadEnd={() => setIsLoading(false)}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-          />
+          {mapHtml && (
+            <WebView
+              key={`${currentLocation?.latitude}-${currentLocation?.longitude}`}
+              originWhitelist={['*']}
+              source={{
+                html: mapHtml,
+                baseUrl: 'http://localhost:8081'
+              }}
+              style={styles.webview}
+              onLoadEnd={() => setIsLoading(false)}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+            />
+          )}
 
           {/* 지도 로딩 중에 보여줄 스피너 */}
-          {isLoading && (
+          {(isLoading || isLocating) && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#4CAF50" />
             </View>
           )}
       </View>
 
-          <TouchableOpacity style={styles.myLocationButton} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.myLocationButton}
+            activeOpacity={0.8}
+            onPress={updateCurrentLocation}
+            disabled={isLocating}
+          >
             <Navigation size={20} color="#4CAF50" />
           </TouchableOpacity>
         </View>
@@ -158,8 +210,12 @@ export function MainScreen({ navigation }: MainScreenProps) {
         {/* Bottom Half - Content (50%) */}
         <View style={styles.contentSection}>
           <View style={styles.locationInfo}>
-            <Text style={styles.locationTitle}>충청북도 청주시</Text>
-            <Text style={styles.locationDesc}>7a구역 · 양토</Text>
+            <Text style={styles.locationTitle}>
+              {currentLocation?.displayAddress || '현재 위치를 확인하는 중입니다'}
+            </Text>
+            <Text style={styles.locationDesc}>
+              {locationError || '현재 위치'}
+            </Text>
           </View>
 
           <View style={styles.envGrid}>
