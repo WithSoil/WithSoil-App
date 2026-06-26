@@ -93,7 +93,9 @@ export function SignupScreen({ navigation }: SignupScreenProps) {
       >
         <View style={styles.header}>
           <Text style={styles.title}>회원가입</Text>
-          <Text style={styles.subtitle}>간단한 정보 입력 후 스마트팜 서비스를 시작하세요.</Text>
+          <Text style={styles.subtitle}>
+            간단한 정보 입력 후 <Text style={styles.subtitleBold}>흙과 함께</Text> 시작하세요.
+          </Text>
         </View>
 
         <View style={styles.form}>
@@ -181,6 +183,10 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    color: '#666666',
+  },
+  subtitleBold: {
+    fontWeight: 'bold',
     color: '#666666',
   },
   form: {

@@ -53,6 +53,49 @@ interface DiagnosisScreenProps {
   navigation: any;
 }
 
+const getImageFileName = (imageUri: string) => {
+  const uriWithoutQuery = imageUri.split('?')[0];
+  return uriWithoutQuery.split('/').pop() || 'crop_image.jpg';
+};
+
+const getImageContentType = (fileName: string, fallback?: string) => {
+  if (fallback) {
+    return fallback;
+  }
+
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (extension === 'png') {
+    return 'image/png';
+  }
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+  if (extension === 'heic') {
+    return 'image/heic';
+  }
+  return 'image/jpeg';
+};
+
+const appendImageFile = async (formData: FormData, imageUri: string) => {
+  const fileName = getImageFileName(imageUri);
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const contentType = getImageContentType(fileName, blob.type);
+    const file = new File([blob], fileName, { type: contentType });
+
+    formData.append('file', file);
+    return;
+  }
+
+  formData.append('file', {
+    uri: imageUri,
+    name: fileName,
+    type: getImageContentType(fileName),
+  } as any);
+};
+
 export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
   const [diagnosisState, setDiagnosisState] = useState<DiagnosisState>('camera');
   const [detectionType, setDetectionType] = useState<'pest' | 'disease'>('pest');
@@ -112,16 +155,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
       const formData = new FormData();
       formData.append('crop_name', cropName);
       formData.append('topk', '5');
-
-      const filename = imageUri.split('/').pop() || 'crop_image.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
-
-      formData.append('file', {
-        uri: Platform.OS === 'android' ? imageUri : imageUri.replace('file://', ''),
-        name: filename,
-        type: type,
-      } as any);
+      await appendImageFile(formData, imageUri);
 
       const data = await aiApi.diagnoseCrop(formData);
 
@@ -281,7 +315,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cameraIconButton}>
             <X size={24} color="#FFF" />
           </TouchableOpacity>
-          <Text style={styles.cameraTitle}>병해충 진단</Text>
+          <Text style={styles.cameraTitle}>병해 진단</Text>
           <TouchableOpacity style={styles.cameraIconButton}>
             <Zap size={20} color="#FFF" />
           </TouchableOpacity>

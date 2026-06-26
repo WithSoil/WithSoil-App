@@ -16,8 +16,9 @@ import {
 } from 'react-native';
 import { ArrowLeft, Send, Image as ImageIcon, Clock, X, Plus, Trash2 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import profileImage from '../assets/image.png';
+import profileImage from '../assets/default_image.png';
 import { AiChatSummaryResponseDto, aiApi } from '../apis/ai';
+import { memberApi } from '../apis/member';
 
 interface ChatbotScreenProps {
   navigation: any;
@@ -29,12 +30,19 @@ type ChatMessage = {
   imageUri?: string;
 };
 
-const initialMessages: ChatMessage[] = [
+const DEFAULT_FARMER_NAME = '초보 농부님';
+
+const createInitialMessages = (farmerName = DEFAULT_FARMER_NAME): ChatMessage[] => [
   {
     role: 'ai',
-    content: '안녕하세요! 저는 초보 농부를 위한 AI 비서입니다. 오늘 어떤 도움이 필요하신가요?',
+    content: `${farmerName}을 위한 농사 도우미예요. 작물 상태나 재배 방법이 궁금하시면 편하게 물어보세요.`,
   },
 ];
+
+const formatFarmerName = (name?: string | null) => {
+  const trimmedName = name?.trim();
+  return trimmedName ? `${trimmedName}님` : DEFAULT_FARMER_NAME;
+};
 
 const suggestions = [
   '내일 비 오는데 물 줘야 해?',
@@ -103,7 +111,8 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
   const [inputValue, setInputValue] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
+  const [farmerName, setFarmerName] = useState(DEFAULT_FARMER_NAME);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => createInitialMessages());
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [currentChatId, setCurrentChatId] = useState<number | null>(null);
   const [currentChatTitle, setCurrentChatTitle] = useState<string>('새 대화');
@@ -115,6 +124,25 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    const loadMemberName = async () => {
+      try {
+        const response = await memberApi.getMypage();
+        const nextFarmerName = formatFarmerName(response.data?.name);
+        setFarmerName(nextFarmerName);
+        setMessages((prev) => (
+          currentChatId === null && prev.length === 1 && prev[0].role === 'ai'
+            ? createInitialMessages(nextFarmerName)
+            : prev
+        ));
+      } catch (error) {
+        console.error('사용자 이름 조회 에러:', error);
+      }
+    };
+
+    loadMemberName();
+  }, [currentChatId]);
 
   const loadChatHistories = useCallback(async () => {
     setHistoryLoading(true);
@@ -139,7 +167,7 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
   const handleStartNewChat = () => {
     setCurrentChatId(null);
     setCurrentChatTitle('새 대화');
-    setMessages(initialMessages);
+    setMessages(createInitialMessages(farmerName));
     setInputValue('');
     setSelectedImageUri(null);
     setShowHistory(false);
@@ -158,7 +186,7 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
 
       setCurrentChatId(detail.chatId);
       setCurrentChatTitle(detail.title || '지난 대화');
-      setMessages(loadedMessages.length > 0 ? loadedMessages : initialMessages);
+      setMessages(loadedMessages.length > 0 ? loadedMessages : createInitialMessages(farmerName));
       setShowHistory(false);
     } catch (error) {
       console.error('AI 채팅방 상세 조회 에러:', error);
@@ -277,7 +305,7 @@ export function ChatbotScreen({ navigation }: ChatbotScreenProps) {
               <ArrowLeft size={20} color="#000" />
             </TouchableOpacity>
             <View style={styles.titleGroup}>
-              <Text style={styles.headerTitle}>초보 농부 비서</Text>
+              <Text style={styles.headerTitle}>흙과 함께 AI 비서</Text>
               <Text numberOfLines={1} style={styles.headerSubtitle}>{currentChatTitle}</Text>
             </View>
           </View>

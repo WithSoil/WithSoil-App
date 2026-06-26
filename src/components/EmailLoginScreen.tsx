@@ -70,7 +70,9 @@ export function EmailLoginScreen({ navigation }: EmailLoginScreenProps) {
         <View style={styles.container}>
           <View style={styles.header}>
             <Text style={styles.title}>이메일 로그인</Text>
-            <Text style={styles.subtitle}>초보농부 서비스를 이용하기 위해 로그인해 주세요.</Text>
+            <Text style={styles.subtitle}>
+              <Text style={styles.subtitleBold}>흙과 함께</Text>를 이용하기 위해 로그인해 주세요.
+            </Text>
           </View>
 
         <View style={styles.form}>
@@ -150,6 +152,10 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
+    color: '#666666',
+  },
+  subtitleBold: {
+    fontWeight: 'bold',
     color: '#666666',
   },
   form: {

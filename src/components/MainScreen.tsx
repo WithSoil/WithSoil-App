@@ -23,7 +23,7 @@ import {
   Settings,
 } from 'lucide-react-native';
 
-import profileImage from '../assets/image.png'; // 실제 경로에 맞게 주석 해제
+import profileImage from '../assets/default_image.png'; // 실제 경로에 맞게 주석 해제
 import { WebView } from 'react-native-webview';
 import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation';
 import { getExpoPushToken } from '../utils/pushNotifications';
