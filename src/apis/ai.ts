@@ -33,13 +33,32 @@ export interface AiChatDetailResponseDto {
   messages: AiChatMessageResponseDto[];
 }
 
+export interface AiDiagnosisGuideItemResponse {
+  title: string;
+  content: string;
+}
+
+export interface AiDiagnosisGuideResponse {
+  cropName: string;
+  diseaseName: string;
+  sourceDiseaseName: string;
+  normal: boolean;
+  symptoms: string;
+  developmentCondition: string;
+  preventionMethod: string;
+  pathogenName: string;
+  pathogenGroup: string;
+  guideItems: AiDiagnosisGuideItemResponse[];
+}
+
 export interface AiDiagnosisResponseDto {
   status: string;
   crop: string;
   resultType: 'low_confidence' | 'healthy' | 'disease';
-  diagnosis: string;
+  diagnosis: string | null;
   message: string;
   confidence: number;
+  guide: AiDiagnosisGuideResponse | null;
 }
 
 export const aiApi = {
