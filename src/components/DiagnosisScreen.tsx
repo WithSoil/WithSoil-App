@@ -10,7 +10,6 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Button,
 } from 'react-native';
 import {
   Camera as CameraIcon,
@@ -32,9 +31,23 @@ import * as ImagePicker from 'expo-image-picker';
 import { CropSelectionSheet } from './CropSelectionSheet';
 import { HealthyPlantSheet } from './HealthyPlantSheet';
 import { LowConfidenceSheet } from './LowConfidenceSheet';
-import { aiApi } from '../apis/ai';
+import { aiApi, AiDiagnosisResponseDto } from '../apis/ai';
 
 type DiagnosisState = 'camera' | 'crop-selection' | 'low-confidence' | 'healthy' | 'result';
+
+const MIN_DIAGNOSIS_CONFIDENCE = 0.9;
+
+export const getDiagnosisState = (result: AiDiagnosisResponseDto): DiagnosisState => {
+  if (result.confidence <= MIN_DIAGNOSIS_CONFIDENCE || result.resultType === 'low_confidence') {
+    return 'low-confidence';
+  }
+
+  if (result.resultType === 'healthy') {
+    return 'healthy';
+  }
+
+  return 'result';
+};
 
 interface DiagnosisScreenProps {
   navigation: any;
@@ -91,7 +104,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
   const [permission, requestPermission] = useCameraPermissions();
 
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
-  const [serverResult, setServerResult] = useState<any>(null);
+  const [serverResult, setServerResult] = useState<AiDiagnosisResponseDto | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
   const CROP_LIST = [
@@ -147,11 +160,11 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
       const data = await aiApi.diagnoseCrop(formData);
 
       if (data && data.status === 'success') {
-            setServerResult(data);
-            setDiagnosisState('result');
-        } else {
+        setServerResult(data);
+        setDiagnosisState(getDiagnosisState(data));
+      } else {
           throw new Error('진단에 실패했습니다.');
-        }
+      }
       } catch (error: any) {
         console.error('진단 에러:', error);
         const errMsg = error.response?.data?.message || error.message || '서버 통신 실패';
@@ -433,12 +446,6 @@ const styles = StyleSheet.create({
   topRight: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 16 },
   bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 16 },
   bottomRight: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 16 },
-  testMenuContainer: { width: '90%', marginBottom: 30, zIndex: 10 },
-  testMenu: { backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 20, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-  testMenuTitle: { color: '#FFF', fontSize: 12, textAlign: 'center', marginBottom: 8, fontWeight: '500' },
-  testMenuButtons: { flexDirection: 'row', gap: 8 },
-  testBtn: { flex: 1, backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center' },
-  testBtnText: { color: '#FFF', fontSize: 12 },
   cameraControls: { flexDirection: 'row', alignItems: 'center', gap: 24, zIndex: 10 },
   subCamBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   captureBtn: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#4CAF50', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: 'rgba(255,255,255,0.2)' },

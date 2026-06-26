@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,14 +11,19 @@ import {
 } from 'react-native';
 import { MapPin, Navigation, ChevronRight } from 'lucide-react-native';
 import { useRoute } from '@react-navigation/native';
-import { memberApi } from '../apis/member';
+import * as Location from 'expo-location';
+import { WebView } from 'react-native-webview';
+import { memberApi, MemberLocation } from '../apis/member';
 import { FormErrorMessage } from './FormErrorMessage';
 import { getErrorStatus } from '../utils/authErrorMessage';
+import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation';
 import { AddressSearchModal } from './AddressSearchModel';
 
 interface LocationSetupProps {
   navigation: any;
 }
+
+const KAKAO_MAP_API_KEY = '585a0d74c620c91802e27770e06d7b8a';
 
 export function LocationSetup({ navigation }: LocationSetupProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,12 +31,35 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
   const [errorMessage, setErrorMessage] = useState('');
 
   const [isModalVisible, setIsModalVisible] = useState(false); 
-  const [locationData, setLocationData] = useState<any>(null);
+  const [locationData, setLocationData] = useState<MemberLocation | null>(null);
 
   const route = useRoute<any>(); 
   const signupParams = route.params;
 
-  const handleAddressSelect = (data: any) => {
+  useEffect(() => {
+    let active = true;
+
+    const loadCurrentLocation = async () => {
+      setIsLoading(true);
+      try {
+        const current = await getCurrentLocation();
+        if (!active) return;
+        setLocationData(current.memberLocation);
+        setSearchQuery(current.displayAddress);
+      } catch (error: unknown) {
+        if (active) setErrorMessage(getLocationErrorMessage(error));
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+
+    loadCurrentLocation();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleAddressSelect = async (data: any) => {
     if (!data) return;
     setErrorMessage('');
 
@@ -50,41 +78,36 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
       ri = '';                         
     }
 
-    setLocationData({
-      sido: data.sido || '',
-      sigungu: data.sigungu || '',
-      eupMyeonDong: eupMyeonDong,
-      ri: ri,                 
-      latitude: 35.8032, 
-      longitude: 126.8801,
-    });
+    setIsLoading(true);
+    try {
+      const [coordinates] = await Location.geocodeAsync(selectedAddress);
+      if (!coordinates) {
+        setErrorMessage('선택한 주소의 지도 위치를 찾지 못했습니다.');
+        return;
+      }
 
-    setIsModalVisible(false);
+      setLocationData({
+        sido: data.sido || '',
+        sigungu: data.sigungu || '',
+        eupMyeonDong,
+        ri,
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+      });
+      setIsModalVisible(false);
+    } catch {
+      setErrorMessage('선택한 주소의 지도 위치를 찾지 못했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleCompleteSignup = async () => {
-    // 1. 회원가입 프로세스로 들어온 경우
-    // if (signupParams && !locationData) {
-    //   Alert.alert('알림', '농장 위치를 먼저 검색해 주세요.');
-    //   return;
-    // }
-
+  const saveLocationAndContinue = async (location: MemberLocation) => {
     setErrorMessage('');
-
     if (signupParams?.fromSignup) {
       setIsLoading(true);
       try {
-        const mockLocation = {
-          sido: '전북특별자치도', // 또는 '전라북도' (sido)
-          sigungu: '김제시',      // (sigungu)
-          eupMyeonDong: '백산면',  // (eupMyeonDong) - optional
-          ri: '상정리',            // (ri) - optional
-          latitude: 35.8032,       // (latitude)
-          longitude: 126.8801,     // (longitude)
-        };
-
-        await memberApi.updateLocation(locationData || mockLocation);
-
+        await memberApi.updateLocation(location);
         navigation.replace('MainTabs');
       } catch (error: unknown) {
         console.warn('위치 저장 실패:', getErrorStatus(error));
@@ -93,11 +116,45 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
         setIsLoading(false);
       }
     } else {
-      // 2. 만약 회원가입을 거치지 않고 들어온 일반 흐름(시뮬레이션 등)일 때는 
-      // 기존 기획대로 메인 탭으로 바로 이동합니다.
       navigation.navigate('MainTabs');
     }
   };
+
+  const handleUseCurrentLocation = async () => {
+    setErrorMessage('');
+    setIsLoading(true);
+    try {
+      const current = await getCurrentLocation();
+      setLocationData(current.memberLocation);
+      setSearchQuery(current.displayAddress);
+      await saveLocationAndContinue(current.memberLocation);
+    } catch (error: unknown) {
+      console.warn('현재 위치 확인 실패:', getErrorStatus(error));
+      setErrorMessage(getLocationErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCompleteSignup = () => {
+    if (!locationData) {
+      setErrorMessage('현재 위치를 사용하거나 지역을 먼저 검색해 주세요.');
+      return;
+    }
+    saveLocationAndContinue(locationData);
+  };
+
+  const mapHtml = locationData?.latitude != null && locationData?.longitude != null ? `
+    <!DOCTYPE html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>html,body,#map{width:100%;height:100%;margin:0;padding:0}</style>
+    <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_MAP_API_KEY}"></script>
+    </head><body><div id="map"></div><script>
+      var position = new kakao.maps.LatLng(${locationData.latitude}, ${locationData.longitude});
+      var map = new kakao.maps.Map(document.getElementById('map'), { center: position, level: 4 });
+      new kakao.maps.Marker({ position: position }).setMap(map);
+    </script></body></html>
+  ` : null;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -106,13 +163,21 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
         <Text style={styles.headerTitle}>위치 설정</Text>
       </View>
 
-      {/* Map Area (Placeholder) */}
       <View style={styles.mapContainer}>
-        {/* Map Center Placeholder */}
-        <View style={styles.mapCenterPlaceholder}>
-          <MapPin size={48} color="#4CAF50" style={styles.mapPinIcon} />
-          <Text style={styles.mapPlaceholderText}>Map view placeholder</Text>
-        </View>
+        {mapHtml ? (
+          <WebView
+            originWhitelist={['*']}
+            source={{ html: mapHtml, baseUrl: 'http://localhost:8081' }}
+            style={styles.map}
+            javaScriptEnabled
+            domStorageEnabled
+          />
+        ) : (
+          <View style={styles.mapCenterPlaceholder}>
+            <MapPin size={48} color="#4CAF50" style={styles.mapPinIcon} />
+            <Text style={styles.mapPlaceholderText}>위치를 선택해 주세요</Text>
+          </View>
+        )}
 
         {/* Floating Search Bar */}
         <View style={styles.searchBarContainer}>
@@ -144,7 +209,8 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
-            onPress={handleCompleteSignup}
+            onPress={handleUseCurrentLocation}
+            disabled={isLoading}
             activeOpacity={0.8}
           >
             <Navigation size={20} color="#FFFFFF" />
@@ -154,6 +220,7 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
             onPress={handleCompleteSignup}
+            disabled={isLoading}
             activeOpacity={0.8}
           >
             {isLoading ? <ActivityIndicator color="#4CAF50" /> : <Text style={styles.secondaryButtonText}>계속하기</Text>}
@@ -195,6 +262,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5',
     position: 'relative',
   },
+  map: { flex: 1 },
   mapCenterPlaceholder: {
     flex: 1,
     alignItems: 'center',

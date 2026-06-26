@@ -36,7 +36,7 @@ export interface AiChatDetailResponseDto {
 export interface AiDiagnosisResponseDto {
   status: string;
   crop: string;
-  resultType: string;
+  resultType: 'low_confidence' | 'healthy' | 'disease';
   diagnosis: string;
   message: string;
   confidence: number;

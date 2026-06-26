@@ -39,7 +39,7 @@ export function LowConfidenceSheet({
       <View style={styles.sheetContainer}>
         <View style={styles.content}>
           <View style={styles.textContainer}>
-            <Text style={styles.title}>앗, 사진을 구별하기 어려워요 🤔</Text>
+            <Text style={styles.title}>사진을 구별하기 어려워요</Text>
             <Text style={styles.description}>
               조금 더 가까이서 밝게 찍어주시거나, 챗봇에게 증상을 직접 설명해 주시겠어요?
             </Text>
