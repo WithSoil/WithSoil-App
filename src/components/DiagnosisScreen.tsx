@@ -96,8 +96,6 @@ const appendImageFile = async (formData: FormData, imageUri: string) => {
   } as any);
 };
 
-const guideIcons = [Scissors, Droplets, BookOpen, AlertTriangle];
-
 const formatConfidence = (confidence?: number) => {
   if (typeof confidence !== 'number') {
     return '분석 중';
@@ -124,6 +122,15 @@ const formatDiseaseName = (value?: string | null) => {
 
 const splitGuideContent = (value?: string | null) => {
   return value?.split('\n').map((line) => line.trim()).filter(Boolean) ?? [];
+};
+
+const cleanBulletPrefix = (value: string) => value.replace(/^[-•]\s*/, '').trim();
+
+const takeGuideLines = (value?: string | null, limit = 3) => {
+  return splitGuideContent(value)
+    .map(cleanBulletPrefix)
+    .filter((line) => line && !line.endsWith(':'))
+    .slice(0, limit);
 };
 
 export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
@@ -240,12 +247,11 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
       ? `${serverResult.crop} ${diagnosisName || guide?.diseaseName || '진단 결과'}`
       : '진단 결과';
     const confidenceColor = getConfidenceColor(serverResult?.confidence);
-    const guideItems = guide?.guideItems ?? [];
-    const detailSections = [
-      { title: '주요 증상', content: guide?.symptoms },
-      { title: '발생하기 쉬운 환경', content: guide?.developmentCondition },
-      { title: '예방 및 방제', content: guide?.preventionMethod },
-    ].filter((section) => splitGuideContent(section.content).length > 0);
+    const actionLines = takeGuideLines(guide?.preventionMethod, 4);
+    const symptomLines = takeGuideLines(guide?.symptoms, 3);
+    const conditionLines = takeGuideLines(guide?.developmentCondition, 3);
+    const hasGuideContent = actionLines.length > 0 || symptomLines.length > 0 || conditionLines.length > 0;
+    const hasPathogenInfo = Boolean(guide?.pathogenName || guide?.pathogenGroup || guide?.sourceDiseaseName);
 
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -301,26 +307,58 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
               ) : null}
             </View>
 
-            {guideItems.length > 0 ? (
-              <View style={styles.guideList}>
-                {guideItems.map((item, index) => {
-                  const Icon = guideIcons[index % guideIcons.length];
-                  return (
-                    <View key={`${item.title}-${index}`} style={styles.guideItem}>
-                      <View style={styles.iconCircle}>
-                        <Icon size={20} color="#4CAF50" />
+            {hasGuideContent ? (
+              <View style={styles.guideContent}>
+                {actionLines.length > 0 ? (
+                  <View style={styles.primaryGuideBox}>
+                    <View style={styles.guideBlockHeader}>
+                      <View style={styles.primaryIconCircle}>
+                        <Scissors size={20} color="#FFFFFF" />
                       </View>
-                      <View style={styles.guideTextContainer}>
-                        <Text style={styles.guideItemTitle}>{item.title}</Text>
-                        {splitGuideContent(item.content).map((line, lineIndex) => (
-                          <Text key={`${item.title}-${lineIndex}`} style={styles.guideItemDesc}>
-                            {line}
-                          </Text>
-                        ))}
+                      <View style={styles.guideBlockTitleWrap}>
+                        <Text style={styles.primaryGuideTitle}>
+                          {guide?.normal ? '이 상태를 유지해요' : '지금 할 일'}
+                        </Text>
+                        <Text style={styles.primaryGuideCaption}>가장 먼저 확인하고 실행할 관리 방법이에요.</Text>
                       </View>
                     </View>
-                  );
-                })}
+                    <View style={styles.guideBulletList}>
+                      {actionLines.map((line, index) => (
+                        <Text key={`action-${index}`} style={styles.primaryGuideText}>• {line}</Text>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.supportGuideGrid}>
+                  {symptomLines.length > 0 ? (
+                    <View style={styles.supportGuideBox}>
+                      <View style={styles.supportGuideHeader}>
+                        <View style={styles.iconCircle}>
+                          <Droplets size={18} color="#4CAF50" />
+                        </View>
+                        <Text style={styles.guideItemTitle}>판단 근거</Text>
+                      </View>
+                      {symptomLines.map((line, index) => (
+                        <Text key={`symptom-${index}`} style={styles.supportGuideText}>{line}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {conditionLines.length > 0 ? (
+                    <View style={styles.supportGuideBox}>
+                      <View style={styles.supportGuideHeader}>
+                        <View style={styles.iconCircle}>
+                          <BookOpen size={18} color="#4CAF50" />
+                        </View>
+                        <Text style={styles.guideItemTitle}>주의할 환경</Text>
+                      </View>
+                      {conditionLines.map((line, index) => (
+                        <Text key={`condition-${index}`} style={styles.supportGuideText}>{line}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
               </View>
             ) : (
               <Text style={styles.emptyGuideText}>
@@ -329,30 +367,31 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
             )}
           </View>
 
-          {detailSections.length > 0 || guide?.pathogenName ? (
+          {hasPathogenInfo ? (
             <View style={[styles.card, styles.detailCard]}>
               <View style={styles.warningHeader}>
                 <AlertTriangle size={22} color="#FF9800" />
-                <Text style={styles.warningTitle}>상세 진단 정보</Text>
+                <Text style={styles.warningTitle}>병해 정보</Text>
               </View>
 
+              {guide?.sourceDiseaseName ? (
+                <View style={styles.pathogenInfoRow}>
+                  <Text style={styles.pathogenLabel}>병명</Text>
+                  <Text style={styles.pathogenValue}>{guide.sourceDiseaseName}</Text>
+                </View>
+              ) : null}
+              {guide?.pathogenGroup ? (
+                <View style={styles.pathogenInfoRow}>
+                  <Text style={styles.pathogenLabel}>분류</Text>
+                  <Text style={styles.pathogenValue}>{guide.pathogenGroup}</Text>
+                </View>
+              ) : null}
               {guide?.pathogenName ? (
-                <View style={styles.pathogenBox}>
+                <View style={styles.pathogenInfoRow}>
                   <Text style={styles.pathogenLabel}>병원체</Text>
                   <Text style={styles.pathogenValue}>{guide.pathogenName}</Text>
                 </View>
               ) : null}
-
-              {detailSections.map((section) => (
-                <View key={section.title} style={styles.detailSection}>
-                  <Text style={styles.detailSectionTitle}>{section.title}</Text>
-                  {splitGuideContent(section.content).map((line, index) => (
-                    <Text key={`${section.title}-${index}`} style={styles.detailSectionText}>
-                      {line}
-                    </Text>
-                  ))}
-                </View>
-              ))}
             </View>
           ) : null}
         </ScrollView>
@@ -484,6 +523,19 @@ const styles = StyleSheet.create({
   cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 },
   cardHeaderTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
   sourceTag: { flexShrink: 1, backgroundColor: '#FFFFFF', color: '#4CAF50', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, overflow: 'hidden' },
+  guideContent: { gap: 12 },
+  primaryGuideBox: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: 'rgba(76, 175, 80, 0.18)' },
+  guideBlockHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  guideBlockTitleWrap: { flex: 1 },
+  primaryIconCircle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4CAF50' },
+  primaryGuideTitle: { fontSize: 16, fontWeight: '800', color: '#111', marginBottom: 3 },
+  primaryGuideCaption: { fontSize: 12, color: '#7A8278', lineHeight: 17 },
+  guideBulletList: { gap: 5 },
+  primaryGuideText: { fontSize: 13, color: '#4E554D', lineHeight: 20 },
+  supportGuideGrid: { gap: 10 },
+  supportGuideBox: { backgroundColor: 'rgba(255, 255, 255, 0.72)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(76, 175, 80, 0.12)' },
+  supportGuideHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 9 },
+  supportGuideText: { fontSize: 12, color: '#666', lineHeight: 18, marginBottom: 4 },
   guideList: { gap: 16 },
   guideItem: { flexDirection: 'row', gap: 12 },
   iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(76, 175, 80, 0.14)' },
@@ -494,6 +546,7 @@ const styles = StyleSheet.create({
   warningHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   warningTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
   pathogenBox: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255, 152, 0, 0.18)' },
+  pathogenInfoRow: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1, borderColor: 'rgba(255, 152, 0, 0.18)' },
   pathogenLabel: { fontSize: 12, color: '#8A6D3B', fontWeight: '700', marginBottom: 4 },
   pathogenValue: { fontSize: 14, color: '#222', fontWeight: '600', lineHeight: 20 },
   detailSection: { backgroundColor: 'rgba(255,255,255,0.65)', borderRadius: 14, padding: 14, marginTop: 10 },
