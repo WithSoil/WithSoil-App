@@ -103,20 +103,29 @@ export function LocationSetup({ navigation }: LocationSetupProps) {
   };
 
   const saveLocationAndContinue = async (location: MemberLocation) => {
+    if (!location) {
+      setErrorMessage('농장 위치를 먼저 선택하거나 검색해 주세요.');
+      return;
+    }
+
     setErrorMessage('');
-    if (signupParams?.fromSignup) {
-      setIsLoading(true);
-      try {
-        await memberApi.updateLocation(location);
+    setIsLoading(true);
+
+    try {
+      // 회원가입이든 단순 수정이든 서버에 위치를 반영해야 하므로 호출
+      await memberApi.updateLocation(location);
+
+      if (signupParams?.fromSignup) {
         navigation.replace('MainTabs');
-      } catch (error: unknown) {
-        console.warn('위치 저장 실패:', getErrorStatus(error));
-        setErrorMessage('위치 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
-      } finally {
-        setIsLoading(false);
+      } else {
+        alert('농장 위치가 성공적으로 수정되었습니다.');
+        navigation.goBack(); 
       }
-    } else {
-      navigation.navigate('MainTabs');
+    } catch (error: unknown) {
+      console.warn('위치 저장 실패:', getErrorStatus(error));
+      setErrorMessage('위치 정보를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setIsLoading(false);
     }
   };
 

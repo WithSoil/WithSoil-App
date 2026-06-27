@@ -17,6 +17,7 @@ import { FarmDiaryScreen } from './src/components/FarmDiaryScreen';
 import { ChatbotScreen } from './src/components/ChatbotScreen';
 import { ProfileScreen } from './src/components/ProfileScreen';
 import { DiaryDetailScreen } from './src/components/DiaryDetailScreen';
+import { RecommendScreen } from './src/components/RecommendScreen';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -45,6 +46,7 @@ export type RootStackParamList = {
     fromSignup?: boolean;
   } | undefined;
   SignupScreen: undefined;
+  Recommend: undefined;
 
   MainTabs: NavigatorScreenParams<TabParamList> | undefined;
   CropDetail: { id: string }; 
@@ -111,6 +113,7 @@ export default function App() {
         <Stack.Screen name="EmailLoginScreen" component={EmailLoginScreen} />
         <Stack.Screen name="DiaryDetailScreen" component={DiaryDetailScreen} />
         <Stack.Screen name="MainTabs" component={MainTabNavigator} />
+        <Stack.Screen name="Recommend" component={RecommendScreen} />
         <Stack.Screen name="CropDetail" component={CropDetailScreen} />
         <Stack.Screen name="Chatbot" component={ChatbotScreen} />
       </Stack.Navigator>

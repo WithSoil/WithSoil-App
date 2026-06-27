@@ -1,19 +1,18 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   ScrollView,
   StyleSheet,
   SafeAreaView,
-  Platform,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import {
   MapPin,
-  Navigation,
   Cloud,
   Droplet,
   Calendar,
@@ -21,13 +20,16 @@ import {
   MessageSquare,
   Bell,
   Settings,
+  ArrowRight,
+  Navigation,
 } from 'lucide-react-native';
 
 import profileImage from '../assets/default_image.png'; // 실제 경로에 맞게 주석 해제
 import { WebView } from 'react-native-webview';
-import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation';
-import { getExpoPushToken } from '../utils/pushNotifications';
 import { memberApi } from '../apis/member';
+import { RecommendCard } from './RecommendCard';
+import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation'; 
+import { getExpoPushToken } from '../utils/pushNotifications'; 
 
 interface MainScreenProps {
   navigation: any;
@@ -36,37 +38,61 @@ interface MainScreenProps {
 const KAKAO_MAP_API_KEY = '585a0d74c620c91802e27770e06d7b8a';
 
 export function MainScreen({ navigation }: MainScreenProps) {
+  console.log(">>> [체크] MainScreen 렌더링 됨!");
   const [isLoading, setIsLoading] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
-  const [locationError, setLocationError] = useState('');
-  const [currentLocation, setCurrentLocation] = useState<{
-    latitude: number;
-    longitude: number;
-    displayAddress: string;
-  } | null>(null);
+  
+  const [memberLocation, setMemberLocation] = useState<any>(null);
+  const [recommendedCrops, setRecommendedCrops] = useState<any[]>([]);
 
-  const updateCurrentLocation = useCallback(async () => {
-    setIsLocating(true);
-    setLocationError('');
-    try {
-      const location = await getCurrentLocation();
-      setCurrentLocation({
-        latitude: location.latitude,
-        longitude: location.longitude,
-        displayAddress: location.displayAddress,
-      });
-      setIsLoading(true);
-    } catch (error: unknown) {
-      setLocationError(getLocationErrorMessage(error));
-      setIsLoading(false);
-    } finally {
-      setIsLocating(false);
-    }
-  }, []);
+  const [mapCoords, setMapCoords] = useState({
+    latitude: 36.6358,
+    longitude: 127.4914
+  });
 
-  useEffect(() => {
-    updateCurrentLocation();
-  }, [updateCurrentLocation]);
+  useFocusEffect(
+    useCallback(() => {
+      const fetchMainData = async () => {
+        try {
+          setIsLoading(true);
+          const response = await memberApi.getMypage(); 
+          
+          if (response?.data) {
+            const { location, recommendations } = response.data;
+            setMemberLocation(location);
+            
+            if (recommendations) {
+              let parsedCrops: any[] = [];
+              if (Array.isArray(recommendations)) {
+                parsedCrops = recommendations;
+              } else if (typeof recommendations === 'string') {
+                try {
+                  const parsed = JSON.parse(recommendations);
+                  if (Array.isArray(parsed)) parsedCrops = parsed;
+                } catch (e) {}
+              }
+              setRecommendedCrops(parsedCrops);
+            } else {
+              setRecommendedCrops([]);
+            }
+            
+            if (location?.latitude && location?.longitude) {
+              setMapCoords({
+                latitude: Number(location.latitude),
+                longitude: Number(location.longitude)
+              });
+            }
+          }
+        } catch (error) {
+          Alert.alert("에러", "API 호출에 실패했습니다.");
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchMainData();
+    }, [])
+  );
 
   useEffect(() => {
     const registerPushToken = async () => {
@@ -83,58 +109,42 @@ export function MainScreen({ navigation }: MainScreenProps) {
     registerPushToken();
   }, []);
 
-  const mapHtml = currentLocation ? `
+  const updateCurrentLocation = useCallback(async () => {
+    setIsLocating(true);
+    try {
+      const location = await getCurrentLocation();
+      setMapCoords({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+    } catch (error: unknown) {
+      Alert.alert("위치 에러", getLocationErrorMessage(error));
+    } finally {
+      setIsLocating(false);
+    }
+  }, []);
+
+  const mapHtml = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-      <style>
-        html, body, #map {
-          width: 100%;
-          height: 100%;
-          margin: 0;
-          padding: 0;
-        }
-      </style>
-      <script>
-        window.onerror = function(message, source, lineno, colno, error) {
-          window.ReactNativeWebView.postMessage("🚨 카카오맵 에러: " + message);
-        };
-        console.error = function(message) {
-          window.ReactNativeWebView.postMessage("🚨 콘솔 에러: " + message);
-        };
-      </script>
+      <style>html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; }</style>
       <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_MAP_API_KEY}"></script>
     </head>
     <body>
       <div id="map"></div>
       <script>
         var container = document.getElementById('map');
-        var options = {
-          center: new kakao.maps.LatLng(${currentLocation.latitude}, ${currentLocation.longitude}),
-          level: 4 // 지도 확대 레벨
-        };
-
+        var options = { center: new kakao.maps.LatLng(${mapCoords.latitude}, ${mapCoords.longitude}), level: 4 };
         var map = new kakao.maps.Map(container, options);
-
-        var markerPosition  = new kakao.maps.LatLng(${currentLocation.latitude}, ${currentLocation.longitude});
-        var marker = new kakao.maps.Marker({
-            position: markerPosition
-        });
+        var marker = new kakao.maps.Marker({ position: new kakao.maps.LatLng(${mapCoords.latitude}, ${mapCoords.longitude}) });
         marker.setMap(map);
       </script>
     </body>
     </html>
-  ` : null;
-  
-  const crops = [
-    { id: '1', name: '방울토마토', match: 95, season: '봄-여름' },
-    { id: '2', name: '상추', match: 92, season: '연중' },
-    { id: '3', name: '딸기', match: 88, season: '봄' },
-    { id: '4', name: '파프리카', match: 85, season: '여름' },
-  ];
-
+  `;
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -147,55 +157,30 @@ export function MainScreen({ navigation }: MainScreenProps) {
             <Text style={styles.headerTitle}>초보 농부</Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Notification')}>
               <Bell size={20} color="#666" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('Settings')}>
               <Settings size={20} color="#666" />
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Top Half - Map (50%) */}
-        {/* <View style={styles.mapSection}>
-          <View style={styles.mapCenter}>
-            <MapPin size={48} color="#4CAF50" style={styles.mapPinIcon} />
-            <Text style={styles.mapText}>지도 보기</Text>
-          </View>
-
-          <View style={styles.searchBarContainer}>
-            <View style={styles.searchBar}>
-              <MapPin size={20} color="#888" />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="지역 검색..."
-                placeholderTextColor="#888"
-              />
-            </View>
-          </View> */}
-          <View style={styles.container}>
-          {mapHtml && (
-            <WebView
-              key={`${currentLocation?.latitude}-${currentLocation?.longitude}`}
-              originWhitelist={['*']}
-              source={{
-                html: mapHtml,
-                baseUrl: 'http://localhost:8081'
-              }}
-              style={styles.webview}
-              onLoadEnd={() => setIsLoading(false)}
-              javaScriptEnabled={true}
-              domStorageEnabled={true}
-            />
-          )}
-
-          {/* 지도 로딩 중에 보여줄 스피너 */}
+{/* Top Half - Map */}
+        <View style={styles.mapSection}>
+          <WebView
+            key={`${mapCoords.latitude}-${mapCoords.longitude}`} // 좌표 바뀔 때마다 맵 리렌더링 강제 유도
+            originWhitelist={['*']}
+            source={{ html: mapHtml, baseUrl: 'http://localhost:8081' }}
+            style={styles.webview}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+          />
+          
           {(isLoading || isLocating) && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#4CAF50" />
             </View>
           )}
-      </View>
 
           <TouchableOpacity
             style={styles.myLocationButton}
@@ -207,31 +192,31 @@ export function MainScreen({ navigation }: MainScreenProps) {
           </TouchableOpacity>
         </View>
 
-        {/* Bottom Half - Content (50%) */}
+        {/* Bottom Half - Content Section */}
         <View style={styles.contentSection}>
+          {/* 주소 정보 영역 */}
           <View style={styles.locationInfo}>
             <Text style={styles.locationTitle}>
-              {currentLocation?.displayAddress || '현재 위치를 확인하는 중입니다'}
+            {memberLocation ? `${memberLocation.sido} ${memberLocation.sigungu}` : "등록된 농장 없음"}
             </Text>
             <Text style={styles.locationDesc}>
-              {locationError || '현재 위치'}
+              {memberLocation ? `${memberLocation.eupMyeonDong || ''} ${memberLocation.ri || ''}` : "위치 설정을 먼저 진행해 주세요."}
             </Text>
           </View>
 
+          {/* 환경 그리드 */}
           <View style={styles.envGrid}>
-            <View style={[styles.envCard, { backgroundColor: '#F1F8E9', borderColor: 'rgba(76, 175, 80, 0.1)' }]}>
+            <View style={styles.envCard}>
               <Droplet size={16} color="#4CAF50" style={styles.envIcon} />
               <Text style={styles.envLabel}>토양</Text>
-              <Text style={styles.envValue}>양토</Text>
+              <Text style={styles.envValue}>{memberLocation ? "양토" : "-"}</Text>
             </View>
-
-            <View style={[styles.envCard, { backgroundColor: '#FFF8E1', borderColor: 'rgba(255, 152, 0, 0.2)' }]}>
+            <View style={styles.envCard}>
               <Cloud size={16} color="#FF9800" style={styles.envIcon} />
               <Text style={styles.envLabel}>기후</Text>
               <Text style={styles.envValue}>22°C</Text>
             </View>
-
-            <View style={[styles.envCard, { backgroundColor: '#EFEBE9', borderColor: 'rgba(121, 85, 72, 0.3)' }]}>
+            <View style={styles.envCard}>
               <Calendar size={16} color="#795548" style={styles.envIcon} />
               <Text style={styles.envLabel}>계절</Text>
               <Text style={styles.envValue}>봄</Text>
@@ -240,39 +225,40 @@ export function MainScreen({ navigation }: MainScreenProps) {
 
           <View style={styles.cropsContainer}>
             <Text style={styles.sectionTitle}>추천 작물</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cropsScroll}>
-              {crops.map((crop) => (
-                <TouchableOpacity
-                  key={crop.id}
-                  style={styles.cropCard}
-                  onPress={() => navigation.navigate('CropDetail', { id: crop.id })}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.cropImageContainer}>
-                    <Text style={styles.cropEmoji}>🌱</Text>
-                    <View style={styles.matchBadge}>
-                      <Star size={10} color="#FFF" fill="#FFF" />
-                      <Text style={styles.matchBadgeText}>{crop.match}%</Text>
-                    </View>
-                  </View>
-                  <View style={styles.cropInfo}>
-                    <Text style={styles.cropName}>{crop.name}</Text>
-                    <Text style={styles.cropSeason}>{crop.season}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            
+            {recommendedCrops.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cropsScroll}>
+                {recommendedCrops.map((crop, index) => (
+                  <RecommendCard
+                    key={index} 
+                    crop={crop}
+                    onPress={() => navigation.navigate('CropDetail', { cropData: crop })}
+                  />
+                ))}
+              </ScrollView>
+            ) : (
+              <TouchableOpacity 
+                style={styles.emptyRecommendBox}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate('Recommend')} 
+              >
+                <View style={styles.emptyTextContainer}>
+                  <Text style={styles.emptyTitle}>나에게 맞는 작물은 무엇일까요?</Text>
+                  <Text style={styles.emptySub}>간단한 목적을 입력하고 맞춤형 작물을 추천받아보세요!</Text>
+                </View>
+                <View style={styles.emptyArrowCircle}>
+                  <ArrowRight size={20} color="#4CAF50" />
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Floating Action Button for Chatbot */}
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => navigation.navigate('Chatbot')}
-          activeOpacity={0.8}
-        >
+        {/* Floating Action Button */}
+        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('Recommend')} activeOpacity={0.8}>
           <MessageSquare size={28} color="#FFFFFF" fill="#FFFFFF" />
         </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -281,6 +267,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFAFA' },
   container: { flex: 1, backgroundColor: '#FAFAFA' },
   webview: { flex: 1 },
+  mapSection: { flex: 1, backgroundColor: '#F5F5F5', position: 'relative' },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -293,10 +280,11 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   loadingContainer: {
-    ...StyleSheet.absoluteFillObject, // 화면 전체를 덮도록 설정
-    backgroundColor: '#FFFFFF',
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 30,
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   profileImageContainer: {
@@ -310,11 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     overflow: 'hidden',
   },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
+  profileImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
   headerRight: { flexDirection: 'row', gap: 8 },
   iconButton: {
@@ -325,56 +309,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  mapSection: { flex: 1, backgroundColor: '#F5F5F5', position: 'relative' },
-  mapCenter: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  mapPinIcon: { marginBottom: 8 },
-  mapText: { fontSize: 14, color: '#888' },
-  searchBarContainer: { position: 'absolute', top: 16, left: 16, right: 16, zIndex: 20 },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    height: 48,
-    gap: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  searchInput: { flex: 1, fontSize: 14, color: '#000', height: '100%' },
-  myLocationButton: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 20,
-  },
   contentSection: { flex: 1, backgroundColor: '#FFFFFF' },
   locationInfo: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 8 },
-  locationTitle: { fontSize: 18, color: '#000', marginBottom: 4 },
+  locationTitle: { fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 4 },
   locationDesc: { fontSize: 14, color: '#888' },
   envGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 24, paddingVertical: 12, gap: 8 },
-  envCard: { flex: 1, borderRadius: 20, padding: 12, borderWidth: 1, alignItems: 'flex-start' },
+  envCard: { flex: 1, borderRadius: 20, padding: 12, borderWidth: 1, borderColor: '#EAEAEE', backgroundColor: '#FAFAFA', alignItems: 'flex-start' },
   envIcon: { marginBottom: 4 },
   envLabel: { fontSize: 12, color: '#888', marginBottom: 2 },
   envValue: { fontSize: 14, fontWeight: '500', color: '#000' },
   cropsContainer: { flex: 1, paddingHorizontal: 24, paddingTop: 8 },
-  sectionTitle: { fontSize: 16, color: '#000', marginBottom: 8 },
-  cropsScroll: { gap: 8, paddingBottom: 16 },
-  cropCard: { width: 112, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: 'rgba(76, 175, 80, 0.2)', borderRadius: 20, overflow: 'hidden' },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#000', marginBottom: 12 },
+  cropsScroll: { gap: 12, paddingBottom: 16 },
+  cropCard: { width: 112, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAEAEE', borderRadius: 20, overflow: 'hidden' },
   cropImageContainer: { height: 80, backgroundColor: '#F1F8E9', alignItems: 'center', justifyContent: 'center', position: 'relative' },
   cropEmoji: { fontSize: 40 },
   matchBadge: {
@@ -409,5 +356,60 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 50,
+  },
+
+  myLocationButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 40,
+  },
+  emptyRecommendBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F1F8E9',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(76, 175, 80, 0.2)',
+    marginTop: 4,
+  },
+  emptyTextContainer: {
+    flex: 1,
+    gap: 4,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#2E7D32',
+  },
+  emptySub: {
+    fontSize: 12,
+    color: '#666',
+  },
+  emptyArrowCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
 });
