@@ -23,7 +23,8 @@ import {
   ArrowRight,
   Navigation,
 } from 'lucide-react-native';
-import profileImage from '../assets/image.png'; 
+
+import profileImage from '../assets/default_image.png'; // 실제 경로에 맞게 주석 해제
 import { WebView } from 'react-native-webview';
 import { memberApi } from '../apis/member';
 import { RecommendCard } from './RecommendCard';

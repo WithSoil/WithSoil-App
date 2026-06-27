@@ -13,7 +13,7 @@ export const getAuthErrorMessage = (error: unknown, flow: AuthFlow) => {
   const status = error.response?.status;
 
   if (!status) {
-    return '서버에 연결할 수 없습니다. 네트워크 상태와 백엔드 실행 여부를 확인해 주세요.';
+    return '서버에 연결할 수 없습니다.';
   }
 
   if (flow === 'login') {

@@ -53,6 +53,86 @@ interface DiagnosisScreenProps {
   navigation: any;
 }
 
+const getImageFileName = (imageUri: string) => {
+  const uriWithoutQuery = imageUri.split('?')[0];
+  return uriWithoutQuery.split('/').pop() || 'crop_image.jpg';
+};
+
+const getImageContentType = (fileName: string, fallback?: string) => {
+  if (fallback) {
+    return fallback;
+  }
+
+  const extension = fileName.split('.').pop()?.toLowerCase();
+  if (extension === 'png') {
+    return 'image/png';
+  }
+  if (extension === 'webp') {
+    return 'image/webp';
+  }
+  if (extension === 'heic') {
+    return 'image/heic';
+  }
+  return 'image/jpeg';
+};
+
+const appendImageFile = async (formData: FormData, imageUri: string) => {
+  const fileName = getImageFileName(imageUri);
+
+  if (Platform.OS === 'web') {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+    const contentType = getImageContentType(fileName, blob.type);
+    const file = new File([blob], fileName, { type: contentType });
+
+    formData.append('file', file);
+    return;
+  }
+
+  formData.append('file', {
+    uri: imageUri,
+    name: fileName,
+    type: getImageContentType(fileName),
+  } as any);
+};
+
+const formatConfidence = (confidence?: number) => {
+  if (typeof confidence !== 'number') {
+    return '분석 중';
+  }
+  return `${Math.round(confidence * 100)}%`;
+};
+
+const getConfidenceColor = (confidence?: number) => {
+  if (typeof confidence !== 'number') {
+    return '#8A8F8A';
+  }
+  if (confidence >= 0.8) {
+    return '#43A047';
+  }
+  if (confidence >= 0.6) {
+    return '#F9A825';
+  }
+  return '#EF5350';
+};
+
+const formatDiseaseName = (value?: string | null) => {
+  return value?.replace(/_/g, ' ').replace(/\s+/g, ' ').trim() ?? '';
+};
+
+const splitGuideContent = (value?: string | null) => {
+  return value?.split('\n').map((line) => line.trim()).filter(Boolean) ?? [];
+};
+
+const cleanBulletPrefix = (value: string) => value.replace(/^[-•]\s*/, '').trim();
+
+const takeGuideLines = (value?: string | null, limit = 3) => {
+  return splitGuideContent(value)
+    .map(cleanBulletPrefix)
+    .filter((line) => line && !line.endsWith(':'))
+    .slice(0, limit);
+};
+
 export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
   const [diagnosisState, setDiagnosisState] = useState<DiagnosisState>('camera');
   const [detectionType, setDetectionType] = useState<'pest' | 'disease'>('pest');
@@ -112,16 +192,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
       const formData = new FormData();
       formData.append('crop_name', cropName);
       formData.append('topk', '5');
-
-      const filename = imageUri.split('/').pop() || 'crop_image.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image/jpeg`;
-
-      formData.append('file', {
-        uri: Platform.OS === 'android' ? imageUri : imageUri.replace('file://', ''),
-        name: filename,
-        type: type,
-      } as any);
+      await appendImageFile(formData, imageUri);
 
       const data = await aiApi.diagnoseCrop(formData);
 
@@ -170,6 +241,18 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
 
   // --- 결과 화면 렌더링 ---
   if (diagnosisState === 'result') {
+    const guide = serverResult?.guide ?? null;
+    const diagnosisName = formatDiseaseName(serverResult?.diagnosis);
+    const title = serverResult
+      ? `${serverResult.crop} ${diagnosisName || guide?.diseaseName || '진단 결과'}`
+      : '진단 결과';
+    const confidenceColor = getConfidenceColor(serverResult?.confidence);
+    const actionLines = takeGuideLines(guide?.preventionMethod, 4);
+    const symptomLines = takeGuideLines(guide?.symptoms, 3);
+    const conditionLines = takeGuideLines(guide?.developmentCondition, 3);
+    const hasGuideContent = actionLines.length > 0 || symptomLines.length > 0 || conditionLines.length > 0;
+    const hasPathogenInfo = Boolean(guide?.pathogenName || guide?.pathogenGroup || guide?.sourceDiseaseName);
+
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
@@ -196,68 +279,121 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
               source={{ uri: selectedImageUri || 'https://images.unsplash.com/photo-1495908333425-29a1e0918c5f?w=800&h=600&fit=crop&auto=format' }}
               style={styles.heroImage}
             />
-            <View style={styles.dangerBadge}>
+            <View style={[styles.dangerBadge, { backgroundColor: confidenceColor }]}>
               <Text style={styles.dangerBadgeText}>
-                {serverResult ? `확신도: ${(serverResult.confidence * 100).toFixed(1)}%` : '위험도: 중간'}
+                {serverResult ? `신뢰도 ${formatConfidence(serverResult.confidence)}` : '분석 완료'}
               </Text>
             </View>
           </View>
 
           <View style={styles.titleSection}>
-            <Text style={styles.mainTitle}>
-              {serverResult ? `${serverResult.crop} ${serverResult.diagnosis}` : '토마토 담배가루이'}
-            </Text>
+            <View style={styles.resultMetaRow}>
+              <Text style={styles.resultCropBadge}>{serverResult?.crop ?? guide?.cropName ?? '작물'}</Text>
+              {guide?.pathogenGroup ? (
+                <Text style={styles.resultTypeBadge}>{guide.pathogenGroup}</Text>
+              ) : null}
+            </View>
+            <Text style={styles.mainTitle}>{title}</Text>
             <Text style={styles.subTitle}>
-              {serverResult ? serverResult.message : '작은 흰색 날개를 가진 해충으로 잎 뒷면에 서식합니다'}
+              {serverResult?.message ?? '진단 결과를 확인해주세요.'}
             </Text>
           </View>
 
-          <View style={[styles.card, { backgroundColor: '#F5F5DC', borderColor: '#D7CCC8' }]}>
-            <Text style={styles.cardHeaderTitle}>👩‍🌾 초보 농부 가이드</Text>
-            <View style={styles.guideList}>
-              <View style={styles.guideItem}>
-                <View style={[styles.iconCircle, { backgroundColor: 'rgba(76, 175, 80, 0.2)' }]}>
-                  <Scissors size={20} color="#4CAF50" />
-                </View>
-                <View style={styles.guideTextContainer}>
-                  <Text style={styles.guideItemTitle}>감염된 잎 제거</Text>
-                  <Text style={styles.guideItemDesc}>피해 입은 잎을 조심스럽게 잘라내고 봉투에 버려주세요</Text>
-                </View>
-              </View>
-              <View style={styles.guideItem}>
-                <View style={[styles.iconCircle, { backgroundColor: 'rgba(76, 175, 80, 0.2)' }]}>
-                  <Droplets size={20} color="#4CAF50" />
-                </View>
-                <View style={styles.guideTextContainer}>
-                  <Text style={styles.guideItemTitle}>친환경 살충제 사용</Text>
-                  <Text style={styles.guideItemDesc}>님 오일이나 칼륨 비누를 5-7일 간격으로 뿌려주세요</Text>
-                </View>
-              </View>
-              <View style={styles.guideItem}>
-                <View style={[styles.iconCircle, { backgroundColor: 'rgba(76, 175, 80, 0.2)' }]}>
-                  <BookOpen size={20} color="#4CAF50" />
-                </View>
-                <View style={styles.guideTextContainer}>
-                  <Text style={styles.guideItemTitle}>예방 관리</Text>
-                  <Text style={styles.guideItemDesc}>주 1회 잎 뒷면을 확인하고 황색 끈끈이 트랩을 설치하세요</Text>
-                </View>
-              </View>
+          <View style={[styles.card, styles.guideCard]}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardHeaderTitle}>초보 농부 가이드</Text>
+              {guide?.sourceDiseaseName ? (
+                <Text style={styles.sourceTag}>{guide.sourceDiseaseName}</Text>
+              ) : null}
             </View>
+
+            {hasGuideContent ? (
+              <View style={styles.guideContent}>
+                {actionLines.length > 0 ? (
+                  <View style={styles.primaryGuideBox}>
+                    <View style={styles.guideBlockHeader}>
+                      <View style={styles.primaryIconCircle}>
+                        <Scissors size={20} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.guideBlockTitleWrap}>
+                        <Text style={styles.primaryGuideTitle}>
+                          {guide?.normal ? '이 상태를 유지해요' : '지금 할 일'}
+                        </Text>
+                        <Text style={styles.primaryGuideCaption}>가장 먼저 확인하고 실행할 관리 방법이에요.</Text>
+                      </View>
+                    </View>
+                    <View style={styles.guideBulletList}>
+                      {actionLines.map((line, index) => (
+                        <Text key={`action-${index}`} style={styles.primaryGuideText}>• {line}</Text>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+
+                <View style={styles.supportGuideGrid}>
+                  {symptomLines.length > 0 ? (
+                    <View style={styles.supportGuideBox}>
+                      <View style={styles.supportGuideHeader}>
+                        <View style={styles.iconCircle}>
+                          <Droplets size={18} color="#4CAF50" />
+                        </View>
+                        <Text style={styles.guideItemTitle}>판단 근거</Text>
+                      </View>
+                      {symptomLines.map((line, index) => (
+                        <Text key={`symptom-${index}`} style={styles.supportGuideText}>{line}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {conditionLines.length > 0 ? (
+                    <View style={styles.supportGuideBox}>
+                      <View style={styles.supportGuideHeader}>
+                        <View style={styles.iconCircle}>
+                          <BookOpen size={18} color="#4CAF50" />
+                        </View>
+                        <Text style={styles.guideItemTitle}>주의할 환경</Text>
+                      </View>
+                      {conditionLines.map((line, index) => (
+                        <Text key={`condition-${index}`} style={styles.supportGuideText}>{line}</Text>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ) : (
+              <Text style={styles.emptyGuideText}>
+                아직 이 진단 결과에 연결된 상세 가이드가 없습니다. 챗봇에게 증상을 함께 물어보세요.
+              </Text>
+            )}
           </View>
 
-          <View style={[styles.card, { backgroundColor: '#FFF3E0', borderColor: '#FFB74D' }]}>
-            <View style={styles.warningHeader}>
-              <AlertTriangle size={24} color="#FF9800" />
-              <Text style={styles.warningTitle}>⚠️ 2차 피해 주의</Text>
-            </View>
-            <View style={styles.warningInnerCard}>
-              <Text style={styles.warningInnerTitle}>토마토황화잎말림병 (TYLCV) 위험</Text>
-              <Text style={styles.warningInnerDesc}>담배가루이가 바이러스를 옮겨 잎이 노랗게 변하고 말릴 수 있습니다.</Text>
-              <View style={styles.tipBox}>
-                <Text style={styles.tipText}>💡 예방 TIP: 해충 발견 즉시 방제하고 주변 잡초를 제거하세요</Text>
+          {hasPathogenInfo ? (
+            <View style={[styles.card, styles.detailCard]}>
+              <View style={styles.warningHeader}>
+                <AlertTriangle size={22} color="#FF9800" />
+                <Text style={styles.warningTitle}>병해 정보</Text>
               </View>
+
+              {guide?.sourceDiseaseName ? (
+                <View style={styles.pathogenInfoRow}>
+                  <Text style={styles.pathogenLabel}>병명</Text>
+                  <Text style={styles.pathogenValue}>{guide.sourceDiseaseName}</Text>
+                </View>
+              ) : null}
+              {guide?.pathogenGroup ? (
+                <View style={styles.pathogenInfoRow}>
+                  <Text style={styles.pathogenLabel}>분류</Text>
+                  <Text style={styles.pathogenValue}>{guide.pathogenGroup}</Text>
+                </View>
+              ) : null}
+              {guide?.pathogenName ? (
+                <View style={styles.pathogenInfoRow}>
+                  <Text style={styles.pathogenLabel}>병원체</Text>
+                  <Text style={styles.pathogenValue}>{guide.pathogenName}</Text>
+                </View>
+              ) : null}
             </View>
-          </View>
+          ) : null}
         </ScrollView>
 
         <View style={styles.bottomActionContainer}>
@@ -281,7 +417,7 @@ export function DiagnosisScreen({ navigation }: DiagnosisScreenProps) {
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.cameraIconButton}>
             <X size={24} color="#FFF" />
           </TouchableOpacity>
-          <Text style={styles.cameraTitle}>병해충 진단</Text>
+          <Text style={styles.cameraTitle}>병해 진단</Text>
           <TouchableOpacity style={styles.cameraIconButton}>
             <Zap size={20} color="#FFF" />
           </TouchableOpacity>
@@ -377,17 +513,45 @@ const styles = StyleSheet.create({
   dangerBadgeText: { color: '#FFF', fontWeight: 'bold' },
   titleSection: { marginBottom: 24 },
   mainTitle: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, color: '#000' },
-  subTitle: { fontSize: 14, color: '#666' },
+  subTitle: { fontSize: 14, color: '#666', lineHeight: 21 },
+  resultMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  resultCropBadge: { backgroundColor: '#E8F5E9', color: '#2E7D32', fontSize: 13, fontWeight: '700', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14 },
+  resultTypeBadge: { backgroundColor: '#F7F7F2', color: '#5F665D', fontSize: 13, fontWeight: '700', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14 },
   card: { borderWidth: 2, borderRadius: 20, padding: 20, marginBottom: 16 },
-  cardHeaderTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: '#000' },
+  guideCard: { backgroundColor: '#F6FAEF', borderColor: '#CFE8C9' },
+  detailCard: { backgroundColor: '#FFF8EC', borderColor: '#FFD38A' },
+  cardTitleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16 },
+  cardHeaderTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
+  sourceTag: { flexShrink: 1, backgroundColor: '#FFFFFF', color: '#4CAF50', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, overflow: 'hidden' },
+  guideContent: { gap: 12 },
+  primaryGuideBox: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: 'rgba(76, 175, 80, 0.18)' },
+  guideBlockHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
+  guideBlockTitleWrap: { flex: 1 },
+  primaryIconCircle: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4CAF50' },
+  primaryGuideTitle: { fontSize: 16, fontWeight: '800', color: '#111', marginBottom: 3 },
+  primaryGuideCaption: { fontSize: 12, color: '#7A8278', lineHeight: 17 },
+  guideBulletList: { gap: 5 },
+  primaryGuideText: { fontSize: 13, color: '#4E554D', lineHeight: 20 },
+  supportGuideGrid: { gap: 10 },
+  supportGuideBox: { backgroundColor: 'rgba(255, 255, 255, 0.72)', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: 'rgba(76, 175, 80, 0.12)' },
+  supportGuideHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 9 },
+  supportGuideText: { fontSize: 12, color: '#666', lineHeight: 18, marginBottom: 4 },
   guideList: { gap: 16 },
   guideItem: { flexDirection: 'row', gap: 12 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  iconCircle: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(76, 175, 80, 0.14)' },
   guideTextContainer: { flex: 1 },
   guideItemTitle: { fontSize: 14, fontWeight: '600', marginBottom: 4, color: '#000' },
-  guideItemDesc: { fontSize: 12, color: '#666', lineHeight: 18 },
+  guideItemDesc: { fontSize: 12, color: '#666', lineHeight: 18, marginBottom: 2 },
+  emptyGuideText: { fontSize: 14, color: '#777', lineHeight: 21 },
   warningHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   warningTitle: { fontSize: 18, fontWeight: 'bold', color: '#000' },
+  pathogenBox: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: 'rgba(255, 152, 0, 0.18)' },
+  pathogenInfoRow: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginTop: 8, borderWidth: 1, borderColor: 'rgba(255, 152, 0, 0.18)' },
+  pathogenLabel: { fontSize: 12, color: '#8A6D3B', fontWeight: '700', marginBottom: 4 },
+  pathogenValue: { fontSize: 14, color: '#222', fontWeight: '600', lineHeight: 20 },
+  detailSection: { backgroundColor: 'rgba(255,255,255,0.65)', borderRadius: 14, padding: 14, marginTop: 10 },
+  detailSectionTitle: { fontSize: 14, color: '#111', fontWeight: '700', marginBottom: 8 },
+  detailSectionText: { fontSize: 12, color: '#666', lineHeight: 18, marginBottom: 3 },
   warningInnerCard: { backgroundColor: 'rgba(255,255,255,0.6)', borderRadius: 12, padding: 16 },
   warningInnerTitle: { fontSize: 14, fontWeight: 'bold', marginBottom: 8, color: '#000' },
   warningInnerDesc: { fontSize: 12, color: '#666', marginBottom: 12 },

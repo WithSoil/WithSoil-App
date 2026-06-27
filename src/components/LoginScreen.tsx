@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Mail } from 'lucide-react-native';
 
-import profileImage from '../assets/image.png'; // 실제 프로젝트의 이미지 경로에 맞게 주석 해제
+import profileImage from '../assets/default_image.png'; // 실제 프로젝트의 이미지 경로에 맞게 주석 해제
 
 interface LoginScreenProps {
   navigation: any;
@@ -26,18 +26,18 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
           <View style={styles.logoContainer}>
             <Image source={profileImage} style={styles.logoImage} />
           </View>
-          <Text style={styles.mainTitle}>스마트팜</Text>
+          <Text style={styles.mainTitle}>흙과 함께</Text>
           <Text style={styles.subTitle}>똑똑하게 키우고, 풍성하게 수확하세요</Text>
         </View>
 
         {/* Social Login Buttons */}
         <View style={styles.buttonWrapper}>
+          {/*
           <TouchableOpacity
             style={[styles.button, { backgroundColor: '#FEE500' }]}
             onPress={() => navigation.navigate('LocationSetup')}
             activeOpacity={0.8}
           >
-            {/* 카카오 아이콘이 있다면 여기에 추가 */}
             <Text style={[styles.buttonText, { color: '#000000' }]}>카카오로 시작하기</Text>
           </TouchableOpacity>
 
@@ -57,13 +57,13 @@ export function LoginScreen({ navigation }: LoginScreenProps) {
             <Text style={[styles.buttonText, { color: '#FFFFFF' }]}>Apple로 시작하기</Text>
           </TouchableOpacity>
 
-          {/* Divider Line ("또는") */}
           <View style={styles.dividerContainer}>
             <View style={styles.dividerLine} />
             <View style={styles.dividerTextWrapper}>
               <Text style={styles.dividerText}>또는</Text>
             </View>
           </View>
+          */}
 
           <TouchableOpacity
             style={[styles.button, styles.emailButton]}

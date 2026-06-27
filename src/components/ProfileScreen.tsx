@@ -14,7 +14,7 @@ import { MapPin, Settings, Bell, HelpCircle, LogOut } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { memberApi } from '../apis/member';
 
-import profileImage from '../assets/image.png'; // 실제 경로에 맞게 주석 해제
+import profileImage from '../assets/default_image.png';
 
 interface ProfileScreenProps {
   navigation: any;
