@@ -21,12 +21,14 @@ import {
   Bell,
   Settings,
   ArrowRight,
+  Navigation,
 } from 'lucide-react-native';
 import profileImage from '../assets/image.png'; 
 import { WebView } from 'react-native-webview';
 import { memberApi } from '../apis/member';
 import { RecommendCard } from './RecommendCard';
-
+import { getCurrentLocation, getLocationErrorMessage } from '../utils/currentLocation'; 
+import { getExpoPushToken } from '../utils/pushNotifications'; 
 
 interface MainScreenProps {
   navigation: any;
@@ -37,6 +39,7 @@ const KAKAO_MAP_API_KEY = '585a0d74c620c91802e27770e06d7b8a';
 export function MainScreen({ navigation }: MainScreenProps) {
   console.log(">>> [체크] MainScreen 렌더링 됨!");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLocating, setIsLocating] = useState(false);
   
   const [memberLocation, setMemberLocation] = useState<any>(null);
   const [recommendedCrops, setRecommendedCrops] = useState<any[]>([]);
@@ -46,59 +49,78 @@ export function MainScreen({ navigation }: MainScreenProps) {
     longitude: 127.4914
   });
 
-useEffect(() => {
-    const fetchMainData = async () => {
-      try {
-        setIsLoading(true);
-        const response = await memberApi.getMypage(); 
-        
-        if (response?.data) {
-          const { location, recommendations } = response.data;
+  useFocusEffect(
+    useCallback(() => {
+      const fetchMainData = async () => {
+        try {
+          setIsLoading(true);
+          const response = await memberApi.getMypage(); 
           
-          // 1. 위치 정보 세팅
-          setMemberLocation(location);
-          
-          // 2. 추천 작물 파싱 로직
-          if (recommendations) {
-            let parsedCrops: any[] = [];
+          if (response?.data) {
+            const { location, recommendations } = response.data;
+            setMemberLocation(location);
             
-            // 배열로 바로 들어온 경우
-            if (Array.isArray(recommendations)) {
-              parsedCrops = recommendations;
-            } 
-            // 혹시 문자열로 들어온 경우 대비
-            else if (typeof recommendations === 'string') {
-              try {
-                const parsed = JSON.parse(recommendations);
-                if (Array.isArray(parsed)) {
-                  parsedCrops = parsed;
-                }
-              } catch (e) {
-                // 파싱 에러 무시
+            if (recommendations) {
+              let parsedCrops: any[] = [];
+              if (Array.isArray(recommendations)) {
+                parsedCrops = recommendations;
+              } else if (typeof recommendations === 'string') {
+                try {
+                  const parsed = JSON.parse(recommendations);
+                  if (Array.isArray(parsed)) parsedCrops = parsed;
+                } catch (e) {}
               }
+              setRecommendedCrops(parsedCrops);
+            } else {
+              setRecommendedCrops([]);
             }
             
-            setRecommendedCrops(parsedCrops);
-          } else {
-            setRecommendedCrops([]);
+            if (location?.latitude && location?.longitude) {
+              setMapCoords({
+                latitude: Number(location.latitude),
+                longitude: Number(location.longitude)
+              });
+            }
           }
-          
-          // 3. 지도 좌표 세팅
-          if (location?.latitude && location?.longitude) {
-            setMapCoords({
-              latitude: Number(location.latitude),
-              longitude: Number(location.longitude)
-            });
-          }
+        } catch (error) {
+          Alert.alert("에러", "API 호출에 실패했습니다.");
+        } finally {
+          setIsLoading(false);
         }
-      } catch (error) {
-        Alert.alert("에러", "API 호출에 실패했습니다.");
-      } finally {
-        setIsLoading(false);
+      };
+
+      fetchMainData();
+    }, [])
+  );
+
+  useEffect(() => {
+    const registerPushToken = async () => {
+      try {
+        const pushToken = await getExpoPushToken();
+        if (pushToken) {
+          await memberApi.updatePushToken(pushToken);
+        }
+      } catch (error: unknown) {
+        console.warn('푸시 알림 등록 실패:', error);
       }
     };
 
-    fetchMainData();
+    registerPushToken();
+  }, []);
+
+  const updateCurrentLocation = useCallback(async () => {
+    setIsLocating(true);
+    try {
+      const location = await getCurrentLocation();
+      setMapCoords({
+        latitude: location.latitude,
+        longitude: location.longitude,
+      });
+    } catch (error: unknown) {
+      Alert.alert("위치 에러", getLocationErrorMessage(error));
+    } finally {
+      setIsLocating(false);
+    }
   }, []);
 
   const mapHtml = `
@@ -122,7 +144,6 @@ useEffect(() => {
     </body>
     </html>
   `;
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
@@ -143,21 +164,31 @@ useEffect(() => {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Top Half - Map */}
+{/* Top Half - Map */}
         <View style={styles.mapSection}>
           <WebView
+            key={`${mapCoords.latitude}-${mapCoords.longitude}`} // 좌표 바뀔 때마다 맵 리렌더링 강제 유도
             originWhitelist={['*']}
             source={{ html: mapHtml, baseUrl: 'http://localhost:8081' }}
             style={styles.webview}
             javaScriptEnabled={true}
             domStorageEnabled={true}
           />
-          {isLoading && (
+          
+          {(isLoading || isLocating) && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#4CAF50" />
             </View>
           )}
+
+          <TouchableOpacity
+            style={styles.myLocationButton}
+            activeOpacity={0.8}
+            onPress={updateCurrentLocation}
+            disabled={isLocating}
+          >
+            <Navigation size={20} color="#4CAF50" />
+          </TouchableOpacity>
         </View>
 
         {/* Bottom Half - Content Section */}
@@ -165,7 +196,7 @@ useEffect(() => {
           {/* 주소 정보 영역 */}
           <View style={styles.locationInfo}>
             <Text style={styles.locationTitle}>
-              {memberLocation ? `${memberLocation.sido} ${memberLocation.sigungu}` : "등록된 농장 없음"}
+            {memberLocation ? `${memberLocation.sido} ${memberLocation.sigungu}` : "등록된 농장 없음"}
             </Text>
             <Text style={styles.locationDesc}>
               {memberLocation ? `${memberLocation.eupMyeonDong || ''} ${memberLocation.ri || ''}` : "위치 설정을 먼저 진행해 주세요."}
@@ -325,8 +356,24 @@ const styles = StyleSheet.create({
     elevation: 8,
     zIndex: 50,
   },
-  
-  // 🌟 새로 정의한 추천 유도 박스 스타일
+
+  myLocationButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    zIndex: 40,
+  },
   emptyRecommendBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -36,7 +36,7 @@ interface DiaryDetailScreenProps {
 }
 
 export function DiaryDetailScreen({ route, navigation }: DiaryDetailScreenProps) {
-  // LogbookScreen에서 네비게이션으로 넘겨줄 일지 ID
+  // FarmDiaryScreen에서 네비게이션으로 넘겨줄 일지 ID
   const { diaryId } = route.params;
 
   const [diary, setDiary] = useState<any>(null);
@@ -44,6 +44,8 @@ export function DiaryDetailScreen({ route, navigation }: DiaryDetailScreenProps)
   const [userToken, setUserToken] = useState<string | null>(null);
 
   const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const fetchDiaryDetail = async () => {
@@ -67,43 +69,40 @@ export function DiaryDetailScreen({ route, navigation }: DiaryDetailScreenProps)
   }, [diaryId]);
 
   const handleDelete = () => {
-    setShowMenu(false); // 메뉴 닫기
-    Alert.alert(
-      '일지 삭제',
-      '정말로 이 농부일지를 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.',
-      [
-        { text: '취소', style: 'cancel' },
-        { 
-          text: '삭제', 
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsLoading(true);
-              await diaryApi.deleteDiary(diaryId); // 백엔드 API 호출
-              Alert.alert('성공', '일지가 삭제되었습니다.', [
-                { 
-                  text: '확인', 
-                  // 삭제 성공 시 이전 목록 화면으로 돌아가기
-                  onPress: () => navigation.goBack() 
-                }
-              ]);
-            } catch (error) {
-              console.error('삭제 에러:', error);
-              Alert.alert('오류', '일지 삭제에 실패했습니다.');
-              setIsLoading(false);
-            }
-          } 
-        }
-      ]
-    );
+    setShowMenu(false);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (isDeleting) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      await diaryApi.deleteDiary(diaryId);
+      setShowDeleteConfirm(false);
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs', params: { screen: 'FarmDiary' } }],
+      });
+    } catch (error) {
+      console.error('삭제 에러:', error);
+      Alert.alert('오류', '일지 삭제에 실패했습니다.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleEdit = () => {
     setShowMenu(false);
-    navigation.navigate('LogbookScreen', {
-      editMode: true,      
-      diaryId: diary.id,     
-      existingData: diary, 
+    navigation.navigate('MainTabs', {
+      screen: 'FarmDiary',
+      params: {
+        editMode: true,
+        diaryId: diary.id,
+        existingData: diary,
+      },
     });
   };
 
@@ -152,21 +151,51 @@ export function DiaryDetailScreen({ route, navigation }: DiaryDetailScreenProps)
       </View>
 
       <Modal visible={showMenu} transparent={true} animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
-          <View style={styles.menuOverlay}>
-            <View style={styles.menuContainer}>
-              <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                <Edit2 size={18} color="#333" />
-                <Text style={styles.menuText}>수정하기</Text>
+        <View style={styles.menuOverlay}>
+          <TouchableWithoutFeedback onPress={() => setShowMenu(false)}>
+            <View style={StyleSheet.absoluteFillObject} />
+          </TouchableWithoutFeedback>
+          <View style={styles.menuContainer}>
+            <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+              <Edit2 size={18} color="#333" />
+              <Text style={styles.menuText}>수정하기</Text>
+            </TouchableOpacity>
+            <View style={styles.menuDivider} />
+            <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+              <Trash2 size={18} color="#F44336" />
+              <Text style={[styles.menuText, { color: '#F44336' }]}>삭제하기</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showDeleteConfirm} transparent={true} animationType="fade">
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitle}>일지를 삭제할까요?</Text>
+            <Text style={styles.confirmDescription}>삭제된 농부일지는 다시 복구할 수 없습니다.</Text>
+            <View style={styles.confirmActions}>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.cancelButton]}
+                onPress={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+              >
+                <Text style={styles.cancelButtonText}>취소</Text>
               </TouchableOpacity>
-              <View style={styles.menuDivider} />
-              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
-                <Trash2 size={18} color="#F44336" />
-                <Text style={[styles.menuText, { color: '#F44336' }]}>삭제하기</Text>
+              <TouchableOpacity
+                style={[styles.confirmButton, styles.deleteButton, isDeleting && styles.deleteButtonDisabled]}
+                onPress={confirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color="#FFF" size="small" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>삭제하기</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       <ScrollView style={styles.mainContent} showsVerticalScrollIndicator={false}>
@@ -302,5 +331,61 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#EAEAEE',
     marginHorizontal: 16,
+  },
+  confirmOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 20,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 8,
+  },
+  confirmDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  confirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  confirmButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F5F5F5',
+  },
+  cancelButtonText: {
+    color: '#555',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  deleteButton: {
+    backgroundColor: '#F44336',
+  },
+  deleteButtonDisabled: {
+    opacity: 0.65,
+  },
+  deleteButtonText: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

@@ -150,7 +150,11 @@ export function CropDetailScreen({ navigation, route }: CropDetailScreenProps) {
           <MessageSquare size={20} color="#4CAF50" />
           <Text style={styles.outlineButtonText}>챗봇에 물어보기</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, styles.primaryButton]} onPress={() => navigation.navigate('Logbook')}>
+        
+        <TouchableOpacity 
+          style={[styles.button, styles.primaryButton]}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'FarmDiary' })}
+        >
           <Text style={styles.primaryButtonText}>내 농부일지에 추가하기</Text>
         </TouchableOpacity>
       </View>

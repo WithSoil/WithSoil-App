@@ -60,4 +60,9 @@ export const memberApi = {
     const response = await apiClient.patch<ApiResponse<MemberLocation>>('/api/v1/members/location', data);
     return response.data;
   },
+
+  updatePushToken: async (pushToken: string): Promise<ApiResponse<void>> => {
+    const response = await apiClient.patch<ApiResponse<void>>('/api/v1/members/push-token', { pushToken });
+    return response.data;
+  },
 };
