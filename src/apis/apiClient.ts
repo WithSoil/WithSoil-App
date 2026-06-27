@@ -10,7 +10,7 @@ export interface ApiResponse<T> {
 
 export const getBaseUrl = () => {
   if (__DEV__) {
-    return process.env.EXPO_PUBLIC_API_BASE_URL ??'https://honest-owls-battle.loca.lt';
+    return process.env.EXPO_PUBLIC_API_BASE_URL ??'https://plenty-pots-nail.loca.lt';
   }
   return 'https://your-production-server.com'; 
 };
