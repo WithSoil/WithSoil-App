@@ -255,7 +255,7 @@ export function MainScreen({ navigation }: MainScreenProps) {
         </View>
 
         {/* Floating Action Button */}
-        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('Recommend')} activeOpacity={0.8}>
+        <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('Chatbot')} activeOpacity={0.8}>
           <MessageSquare size={28} color="#FFFFFF" fill="#FFFFFF" />
         </TouchableOpacity>
       </View>
